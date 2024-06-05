@@ -10,9 +10,8 @@ class Processor:
             local_files_only=True
         )
     
-    def process_audio(self, list_audio_filepaths):
+    def process_audio(self, list_audio_filepaths, labels):
         print("Processing audio files")
-
         def prepare_dataset(batch):
             audio = batch["audio"]
             features = self.audio_processor.feature_extractor(
@@ -27,15 +26,14 @@ class Processor:
             return batch
         
         audio_dataset = Dataset.from_dict({
-            "audio": list_audio_filepaths
+            "audio": list_audio_filepaths,
+            "labels": labels
         })
 
         audio_dataset = audio_dataset.cast_column("audio", Audio()).map(prepare_dataset)
 
-        inputs = torch.tensor(audio_dataset['input_features'])
-        att_mask = torch.tensor(audio_dataset['attention_mask'])
-
         del self.audio_processor
 
-        return inputs, att_mask
+        # Contains input_features, attention_mask, labels
+        return audio_dataset 
     

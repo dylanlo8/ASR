@@ -1,14 +1,15 @@
 from datasets import Dataset, Audio
 from transformers import AutoProcessor, WhisperModel, AutoTokenizer, AutoModelForCausalLM, AutoModel
 import torch
+from collections import OrderedDict
+
 import pytorch_lightning as pl
 
 
-class TranslateModel(torch.nn.Module):
+class TranslateModel(pl.LightningModule):
     def __init__(self, llm="./sea-lion-7b-instruct"):
         super(TranslateModel, self).__init__()
 
-        # Device
         self.device_type = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Define the Adaptor
@@ -29,16 +30,19 @@ class TranslateModel(torch.nn.Module):
             local_files_only=True
         )
 
+        # Prevent gradient updates for the LLM
+        for param in self.llm.parameters():
+            param.requires_grad = False
+
         # Embedding Prompt Format
         self.prefix_embeddings = self.embed_prompt("### USER:\nTranslate the following to English. ")
         self.suffix_embeddings = self.embed_prompt(" \n\n### RESPONSE:\n")
 
-    def forward(self, batch):
-        torch.cuda.empty_cache()
+    def forward(self, audio_embeddings):
         # Adapt audio embeddings
-        adapted_batch = self.adaptor(batch) # (batch_size, 1500, 1024)
+        adapted_audio_embeddings = self.adaptor(audio_embeddings) # (batch_size, 1500, 1024)
 
-        size = adapted_batch.size(0)
+        size = adapted_audio_embeddings.size(0) # get batch_size of audio embeddings
 
         # LLM Generation Kwargs
         generation_kwargs = {
@@ -50,25 +54,26 @@ class TranslateModel(torch.nn.Module):
             "repetition_penalty": 1.2,
         }
 
-        input_embeddings = torch.cat([
+        # Concatenate audio embeddings with embedded prefix and suffix prompt template
+        cat_embeddings = torch.cat([
             self.prefix_embeddings.repeat(size, 1, 1), 
-            adapted_batch, 
+            adapted_audio_embeddings, 
             self.suffix_embeddings.repeat(size, 1, 1)], 
             dim=1
         )
         
-        input_embeddings = input_embeddings.to("cuda")
+        #input_embeddings = input_embeddings.to("cuda")
 
         # Feed into LLM
         output = self.llm.generate(
-            inputs_embeds = input_embeddings,
+            inputs_embeds = cat_embeddings,
             **generation_kwargs,
             return_dict_in_generate=True, 
             output_logits=True
         ) # contains sequences and logits
 
-        return output
-        
+        return output # contains sequences and logits properties
+    
     def decode(self, output):
         # To obtain English translation, if logits is not required
         translated_output = self.tokenizer.batch_decode(output.sequences, skip_special_tokens=True)
