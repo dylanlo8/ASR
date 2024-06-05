@@ -2,12 +2,28 @@ from datasets import Dataset, Audio
 from transformers import AutoProcessor, WhisperModel, AutoTokenizer, AutoModelForCausalLM, AutoModel
 import torch
 from collections import OrderedDict
-
 import pytorch_lightning as pl
 
-
-class TranslateModel(pl.LightningModule):
+class TranslateModel(torch.nn.Module):
+    """
+    PyTorch Module for translating audio embeddings to English text using a pre-trained LLM.
+    
+    Attributes:
+        device_type (torch.device): Device type (CUDA if available, else CPU).
+        adaptor (torch.nn.Linear): Linear layer to adapt audio embeddings.
+        tokenizer (AutoTokenizer): Tokenizer for the pre-trained LLM.
+        llm (AutoModelForCausalLM): Pre-trained LLM for causal language modeling.
+        prefix_embeddings (torch.Tensor): Embedded prefix prompt.
+        suffix_embeddings (torch.Tensor): Embedded suffix prompt.
+    """
+    
     def __init__(self, llm="./sea-lion-7b-instruct"):
+        """
+        Initializes the TranslateModel with the specified pre-trained LLM.
+        
+        Args:
+            llm (str): Path to the pre-trained LLM.
+        """
         super(TranslateModel, self).__init__()
 
         self.device_type = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -39,10 +55,19 @@ class TranslateModel(pl.LightningModule):
         self.suffix_embeddings = self.embed_prompt(" \n\n### RESPONSE:\n")
 
     def forward(self, audio_embeddings):
+        """
+        Forward pass of the model. Adapts audio embeddings and generates output using the LLM.
+        
+        Args:
+            audio_embeddings (torch.Tensor): Input audio embeddings.
+        
+        Returns:
+            output (dict): Generated output containing sequences and logits.
+        """
         # Adapt audio embeddings
-        adapted_audio_embeddings = self.adaptor(audio_embeddings) # (batch_size, 1500, 1024)
+        adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, 1500, 1024)
 
-        size = adapted_audio_embeddings.size(0) # get batch_size of audio embeddings
+        size = adapted_audio_embeddings.size(0)  # get batch_size of audio embeddings
 
         # LLM Generation Kwargs
         generation_kwargs = {
@@ -62,24 +87,39 @@ class TranslateModel(pl.LightningModule):
             dim=1
         )
         
-        #input_embeddings = input_embeddings.to("cuda")
-
         # Feed into LLM
         output = self.llm.generate(
-            inputs_embeds = cat_embeddings,
+            inputs_embeds=cat_embeddings,
             **generation_kwargs,
             return_dict_in_generate=True, 
             output_logits=True
-        ) # contains sequences and logits
+        )  # contains sequences and logits
 
-        return output # contains sequences and logits properties
+        return output  # contains sequences and logits properties
     
     def decode(self, output):
-        # To obtain English translation, if logits is not required
+        """
+        Decodes the output sequences from the LLM to obtain the English translation.
+        
+        Args:
+            output (dict): Generated output containing sequences.
+        
+        Returns:
+            translated_output (list): List of translated English text.
+        """
         translated_output = self.tokenizer.batch_decode(output.sequences, skip_special_tokens=True)
         return translated_output
     
     def embed_prompt(self, prompt):
+        """
+        Embeds the given prompt using the LLM's tokenizer and embedding layer.
+        
+        Args:
+            prompt (str): Input prompt to be embedded.
+        
+        Returns:
+            embeddings (torch.Tensor): Embedded prompt.
+        """
         tokens = self.tokenizer(prompt, return_tensors="pt")
         embeddings = self.llm.transformer.wte(tokens['input_ids'])
         return embeddings.to("cpu")
