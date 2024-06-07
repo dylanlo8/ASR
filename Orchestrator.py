@@ -1,13 +1,12 @@
 import torch
 from TranslateModel import TranslateModel
 import pytorch_lightning as pl
-from collections import OrderedDict
 import torch.optim as optim
 from transformers import AutoTokenizer
 from utils import *
 import torch.nn.functional as F
 
-class LightningTransformer(pl.LightningModule):
+class LightningTranslator(pl.LightningModule):
     """
     PyTorch Lightning Module for training the TranslateModel.
     
@@ -130,6 +129,7 @@ class LightningTransformer(pl.LightningModule):
 
         return optimizer
 
+
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):
     """
     PyTorch Dataset module for audio embeddings and labels.
@@ -180,3 +180,6 @@ class AudioEmbeddingsDataset(torch.utils.data.Dataset):
             tuple: Tuple containing the audio embedding and label.
         """
         return self.audio_embeddings[idx], self.labels[idx]
+
+if __name__ == "__main__":
+    translator = LightningTranslator()

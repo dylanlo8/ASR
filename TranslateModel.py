@@ -1,8 +1,5 @@
-from datasets import Dataset, Audio
-from transformers import AutoProcessor, WhisperModel, AutoTokenizer, AutoModelForCausalLM, AutoModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-from collections import OrderedDict
-import pytorch_lightning as pl
 
 class TranslateModel(torch.nn.Module):
     """
