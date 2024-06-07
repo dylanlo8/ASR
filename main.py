@@ -39,7 +39,7 @@ def main():
 
     lightning_translator = LightningTranslator()
 
-    trainer = pl.Trainer()
+    trainer = pl.Trainer(devices = 4, accelerator= 'auto')
     trainer.fit(model=lightning_translator, train_dataloaders=train_audioloader)
 
 if __name__ == "__main__":
