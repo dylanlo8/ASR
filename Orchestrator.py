@@ -2,6 +2,10 @@ import torch
 from TranslateModel import TranslateModel
 import pytorch_lightning as pl
 from collections import OrderedDict
+import torch.optim as optim
+from transformers import AutoTokenizer
+from utils import *
+import torch.nn.functional as F
 
 class LightningTransformer(pl.LightningModule):
     """
@@ -12,9 +16,6 @@ class LightningTransformer(pl.LightningModule):
     """
     
     def __init__(self):
-        """
-        Initializes the LightningTransformer with the TranslateModel.
-        """
         super().__init__()
         self.model = TranslateModel()
 
@@ -48,19 +49,36 @@ class LightningTransformer(pl.LightningModule):
         output = self.forward(audio_embeddings)
         
         # Calculate loss
-        loss_value = self.calculate_loss(output.logits, labels)
-
-        # Compile loss into a tqdm dictionary
-        tqdm_dict = {'train_loss': loss_value}
-
-        # Compile loss value with progress bar and log
-        loss = OrderedDict({
-            'loss': loss_value,
-            'progress_bar': tqdm_dict,
-            'log': tqdm_dict
-        })
+        loss = self.calculate_loss(output.logits, labels)
 
         return loss
+    
+    def validation_step(self, batch, batch_idx):
+        """
+        Training step for the model. Calculates the loss and returns it.
+        
+        Args:
+            batch (tuple): Batch of data containing audio embeddings and labels.
+            batch_idx (int): Index of the batch.
+        
+        Returns:
+            loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
+        """
+        audio_embeddings, labels = batch
+
+        # Get predicted tokens
+        output = self.forward(audio_embeddings)
+        
+        # Calculate loss
+        loss = self.calculate_loss(output.logits, labels)
+
+        return loss
+    
+    def predict_step(self, batch, batch_idx):
+        output = self.forward(batch)
+        
+        output_tokens = self.model.decode(output)
+        return output_tokens
 
     def calculate_loss(self, logits, labels):
         """
@@ -73,9 +91,19 @@ class LightningTransformer(pl.LightningModule):
         Returns:
             loss_value (torch.Tensor): Calculated loss value.
         """
-        loss_fn = torch.nn.CrossEntropyLoss()
-        loss_value = loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
-        return loss_value
+        
+        generated_logits, target_ids = padding_process(logits, target_ids)
+
+        # Comment out if using GPU
+        # generated_logits = generated_logits.to("cpu")
+        # target_ids = target_ids.to("cpu")
+
+        loss = F.cross_entropy(
+            generated_logits.reshape(-1, generated_logits.shape[-1]), target_ids.view(-1)
+        )
+        
+        return loss
+        
     
     def configure_optimizers(self):
         """
@@ -84,7 +112,20 @@ class LightningTransformer(pl.LightningModule):
         Returns:
             optimizer (torch.optim.Optimizer): Configured optimizer.
         """
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
+
+        lr_default = 1.5e-3
+        adam_beta1 = 0.9
+        adama_beta2 = 0.999
+        adam_eps = 1e-8
+
+        # TODO: experiment with AdamW
+        optimizer = optim.Adam(
+            self.model.parameters(),
+            lr=lr_default,
+            betas=(adam_beta1, adama_beta2),
+            eps=adam_eps,
+        )
+
         return optimizer
 
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):
@@ -96,16 +137,26 @@ class AudioEmbeddingsDataset(torch.utils.data.Dataset):
         labels (torch.Tensor): Tensor of labels.
     """
     
-    def __init__(self, audio_embeddings, labels):
+    def __init__(self, audio_embeddings, transcripts):
         """
-        Initializes the AudioEmbeddingsDataset with audio embeddings and labels.
+        Initializes the AudioEmbeddingsDataset with audio embeddings and audio transcript.
         
         Args:
             audio_embeddings (torch.Tensor): Tensor of audio embeddings.
-            labels (torch.Tensor): Tensor of labels.
+            labels (torch.Tensor): Tensor of tokenised labels.
         """
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            "./sea-lion-7b-instruct", 
+            trust_remote_code=True,
+            local_files_only=True
+        )
+
+        tokens = tokenizer(transcripts, return_tensors="pt", padding=True)
+        tokenised_labels = tokens["input_ids"]
+
         self.audio_embeddings = audio_embeddings
-        self.labels = labels
+        self.labels = tokenised_labels
 
     def __len__(self):
         """
