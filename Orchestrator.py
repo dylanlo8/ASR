@@ -19,16 +19,18 @@ class LightningTransformer(pl.LightningModule):
         super().__init__()
         self.model = TranslateModel()
 
-    def forward(self, audio_embeddings):
+    def forward(self, batch):
         """
         Forward pass of the model. Generates output using the TranslateModel.
         
         Args:
-            audio_embeddings (torch.Tensor): Input audio embeddings.
+            
         
         Returns:
             output (dict): Generated output containing logits and sequences.
         """
+
+        audio_embeddings, _ = batch
         output = self.model(audio_embeddings)
         return output  # contains logits and sequences
 
