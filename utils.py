@@ -8,11 +8,9 @@ def process_output_logits(output_logits):
     stacked_logits = torch.stack(output_logits)
     # Remove the last token, since it represents </end_of_text>
     stacked_logits = stacked_logits[:-1][:][:]
-    # Convert logits to probabilities
-    prob_logits = stacked_logits.softmax(dim=-1)
-    # Dimensions of prob_logits: [max_length_of_generated_seq][batch_size][vocab_size]
-    prob_logits_transposed = prob_logits.transpose(0, 1)
+    # Dimensions of stacked_logits: [max_length_of_generated_seq][batch_size][vocab_size]
     # Dimensions of transposed: [batch_size][max_length_of_generated_seq][vocab_size]
+    prob_logits_transposed = stacked_logits.transpose(0, 1)
     return prob_logits_transposed
 
 def compare_generated_and_actual(prob_logits_transposed, target_ids):    

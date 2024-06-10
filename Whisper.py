@@ -1,4 +1,5 @@
 from transformers import WhisperModel
+from torch.utils.data import DataLoader
 import torch
 
 class Whisper:
@@ -17,6 +18,7 @@ class Whisper:
         Args:
             audio_encoder (str): Path to the pre-trained Whisper model.
         """
+        self.BATCH_SIZE = 32
         self.device_type = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         print("Loading Whisper")
@@ -28,27 +30,47 @@ class Whisper:
         Embeds the audio inputs from the dataset using the Whisper model.
         
         Args:
-            audio_dataset (dict): Dataset containing audio features and attention masks.
+            audio_dataset (Dataset): Dataset containing audio features and attention masks.
         
         Returns:
             tuple: Tuple containing audio embeddings and labels.
         """
-        inputs = torch.tensor(audio_dataset['input_features']).to(self.device_type)
-        att_mask = torch.tensor(audio_dataset['attention_mask']).to(self.device_type)
-        labels = audio_dataset['labels']
+        # Batch Embedding
+
+        print(audio_dataset)
+
+        audio_dataset.set_format(type='torch', columns=['input_features', 'attention_mask', 'labels'])
+        data_loader = DataLoader(audio_dataset, batch_size = self.BATCH_SIZE, shuffle=False)
+
+        all_embeddings = []
+        all_labels = []
 
         with torch.no_grad():
-            encoder_outputs = self.audio_encoder.encoder(
-                inputs, 
-                output_hidden_states=True,
-                attention_mask=att_mask
-            )
+            for batch in data_loader:
+                # Push to cuda
+                inputs = batch['input_features'].to(self.device_type)
+                att_mask = batch['attention_mask'].to(self.device_type)
+                labels = batch['labels']
+
+                # Embed Audio Batch
+                encoder_outputs = self.audio_encoder.encoder(
+                    inputs,
+                    output_hidden_states=True,
+                    attention_mask=att_mask
+                )
+
+                # Extract audio embeddings
+                audio_embeddings = encoder_outputs.last_hidden_state.to('cpu')
+
+                all_embeddings.append(audio_embeddings)
+                all_labels.extend(labels)
+
+        # Concatenate all embeddings
+        all_embeddings = torch.cat(all_embeddings, dim=0)
 
         # Clear memory
         del self.audio_encoder
         torch.cuda.empty_cache()
 
-        audio_embeddings = encoder_outputs.last_hidden_state.to('cpu')
-
         # To be parsed into Dataloader
-        return audio_embeddings, labels 
+        return all_embeddings, all_labels 

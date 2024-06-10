@@ -61,6 +61,9 @@ class TranslateModel(torch.nn.Module):
         Returns:
             output (dict): Generated output containing sequences and logits.
         """
+
+        print(audio_embeddings.dtype)
+        
         # Adapt audio embeddings
         adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, 1500, 1024)
 
