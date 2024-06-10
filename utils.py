@@ -2,7 +2,6 @@ import torch
 
 # Declare variables as ENV 
 vocab_size = 256000
-batch_size = 2
 
 def process_output_logits(output_logits):
     # Convert tuple of tensors to a single tensor with 3D dimensions
@@ -35,10 +34,13 @@ def pad_actual(target_ids, diff_in_len):
 
 def pad_generated_seq(generated_logits, diff_in_len):
     # Create padding tensor that represents <end_of_text> with token id 1
+    batch_size = generated_logits.size(0) # index 0 of generated logits gives the batch size 
     padding_logit = torch.zeros((batch_size, 1, vocab_size))
-    padding_logit[0,0,1] = 1.0
-    padding_logit = padding_logit.repeat(1, diff_in_len, 1)
+    padding_logit[:, :, 1] = 1.0
+    padding_logit = padding_logit.repeat(1, diff_in_len, 1).to(generated_logits.device)
     # Pad generated sequence along dimension 1 (length of sequence)
+    print(generated_logits.shape)
+    print(padding_logit.shape)
     padded_logit = torch.cat((generated_logits, padding_logit), dim=1)
     # Return padded logit
     return padded_logit
@@ -51,10 +53,10 @@ def padding_process(output_logits, target_ids):
 
     # Case 1: Generated sequence is longer than actual
     if (diff_in_len > 0):
-        target_ids = pad_actual(target_ids, diff_in_len)
+        target_ids = pad_actual(target_ids, abs(diff_in_len))
     # Case 2: Generated sequence is shorter than actual
     elif (diff_in_len < 0):
-        generated_logits = pad_generated_seq(generated_logits, diff_in_len)
+        generated_logits = pad_generated_seq(generated_logits, abs(diff_in_len))
     # Case 3: Same maximum length
     else:
         print("Max length of generated = Max length of actual in the batch")

@@ -25,12 +25,12 @@ def main():
 
     # Parse through DataLoader
     train_audiodataset = AudioEmbeddingsDataset(train_audio_embeddings, train_transcript)
-    train_audioloader = DataLoader(train_audiodataset, batch_size=4, shuffle=True)
+    train_audioloader = DataLoader(train_audiodataset, batch_size=2, shuffle=True)
 
     torch.cuda.empty_cache()
     lightning_translator = LightningTranslator()
 
-    trainer = pl.Trainer(devices = 4, accelerator= 'auto')
+    trainer = pl.Trainer(devices = 1, accelerator= 'auto')
     trainer.fit(model=lightning_translator, train_dataloaders=train_audioloader)
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ class LightningTranslator(pl.LightningModule):
         super().__init__()
         self.model = TranslateModel()
 
-    def forward(self, batch):
+    def forward(self, audio_embeddings):
         """
         Forward pass of the model. Generates output using the TranslateModel.
         
@@ -29,7 +29,6 @@ class LightningTranslator(pl.LightningModule):
             output (dict): Generated output containing logits and sequences.
         """
 
-        audio_embeddings, _ = batch
         output = self.model(audio_embeddings)
         return output  # contains logits and sequences
 
@@ -44,7 +43,8 @@ class LightningTranslator(pl.LightningModule):
         Returns:
             loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
         """
-        audio_embeddings, labels = batch
+
+        audio_embeddings, labels = batch[0], batch[1]
 
         # Get predicted tokens
         output = self.forward(audio_embeddings)
@@ -52,6 +52,7 @@ class LightningTranslator(pl.LightningModule):
         # Calculate loss
         loss = self.calculate_loss(output.logits, labels)
 
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -65,7 +66,7 @@ class LightningTranslator(pl.LightningModule):
         Returns:
             loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
         """
-        audio_embeddings, labels = batch
+        audio_embeddings, labels = batch[0], batch[1]
 
         # Get predicted tokens
         output = self.forward(audio_embeddings)
@@ -93,17 +94,19 @@ class LightningTranslator(pl.LightningModule):
             loss_value (torch.Tensor): Calculated loss value.
         """
         
-        generated_logits, target_ids = padding_process(logits, target_ids)
+        generated_logits, labels = padding_process(logits, labels)
 
         # Comment out if using GPU
         # generated_logits = generated_logits.to("cpu")
-        # target_ids = target_ids.to("cpu")
+        # labels = labels.to("cpu")
 
         loss = F.cross_entropy(
-            generated_logits.reshape(-1, generated_logits.shape[-1]), target_ids.view(-1)
+            generated_logits.reshape(-1, generated_logits.shape[-1]), labels.view(-1)
         )
         
-        return loss
+        loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
+
+        return loss_with_grad
         
     
     def configure_optimizers(self):

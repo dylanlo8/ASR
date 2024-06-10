@@ -118,5 +118,5 @@ class TranslateModel(torch.nn.Module):
             embeddings (torch.Tensor): Embedded prompt.
         """
         tokens = self.tokenizer(prompt, return_tensors="pt")
-        embeddings = self.llm.transformer.wte(tokens['input_ids'])
-        return embeddings.to("cpu")
+        embeddings = self.llm.transformer.wte(tokens['input_ids'].to("cuda"))
+        return embeddings

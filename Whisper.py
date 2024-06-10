@@ -35,7 +35,7 @@ class Whisper:
         """
         inputs = torch.tensor(audio_dataset['input_features']).to(self.device_type)
         att_mask = torch.tensor(audio_dataset['attention_mask']).to(self.device_type)
-        labels = torch.tensor(audio_dataset['labels']).to(self.device_type)
+        labels = audio_dataset['labels']
 
         with torch.no_grad():
             encoder_outputs = self.audio_encoder.encoder(
