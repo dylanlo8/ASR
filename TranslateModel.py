@@ -64,6 +64,8 @@ class TranslateModel(torch.nn.Module):
 
         print(audio_embeddings.dtype)
         
+
+        print(audio_embeddings.dtype)
         # Adapt audio embeddings
         adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, 1500, 1024)
 
