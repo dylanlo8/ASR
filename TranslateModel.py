@@ -1,17 +1,34 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 
+class Adaptor(torch.nn.Module):
+    """
+    Adaptor module to adapt audio embeddings.
+    """
+    def __init__(self):
+        super(Adaptor, self).__init__()
+        self.pool = torch.nn.AdaptiveAvgPool1d(output_size = 250)
+        self.linear = torch.nn.Linear(1024, 4096)
+
+    def forward(self, x):
+        # Apply adaptive pooling along dimension 1
+        x = self.pool(x.permute(0, 2, 1))  # Permute input to match AdaptiveAvgPool1d input format
+        x = x.permute(0, 2, 1)  # Permute back to the original format
+        # Apply linear transformation along dimension 2
+        x = self.linear(x)
+        return x
+
 class TranslateModel(torch.nn.Module):
     """
     PyTorch Module for translating audio embeddings to English text using a pre-trained LLM.
     
     Attributes:
         device_type (torch.device): Device type (CUDA if available, else CPU).
-        adaptor (torch.nn.Linear): Linear layer to adapt audio embeddings.
         tokenizer (AutoTokenizer): Tokenizer for the pre-trained LLM.
         llm (AutoModelForCausalLM): Pre-trained LLM for causal language modeling.
         prefix_embeddings (torch.Tensor): Embedded prefix prompt.
         suffix_embeddings (torch.Tensor): Embedded suffix prompt.
+        adaptor (Adaptor): Adaptor for adapting audio embeddings.
     """
     
     def __init__(self, llm="./sea-lion-7b-instruct"):
@@ -24,9 +41,6 @@ class TranslateModel(torch.nn.Module):
         super(TranslateModel, self).__init__()
 
         self.device_type = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        # Define the Adaptor
-        self.adaptor = torch.nn.Linear(1024, 4096)  # Do we need bias?
 
         # Load the LLM and its tokenizer
         print("Loading LLM")
@@ -51,6 +65,9 @@ class TranslateModel(torch.nn.Module):
         self.prefix_embeddings = self.embed_prompt("### USER:\nTranslate the following to English. ")
         self.suffix_embeddings = self.embed_prompt(" \n\n### RESPONSE:\n")
 
+        # Initialize the adaptor
+        self.adaptor = Adaptor()
+
     def forward(self, audio_embeddings):
         """
         Forward pass of the model. Adapts audio embeddings and generates output using the LLM.
@@ -64,8 +81,6 @@ class TranslateModel(torch.nn.Module):
 
         print(audio_embeddings.dtype)
         
-
-        print(audio_embeddings.dtype)
         # Adapt audio embeddings
         adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, 1500, 1024)
 
@@ -75,7 +90,7 @@ class TranslateModel(torch.nn.Module):
         generation_kwargs = {
             "do_sample": False,  # set to true if temperature is not 0
             "temperature": None,
-            "max_new_tokens": 30,
+            "max_new_tokens": 140,
             "top_k": 50,
             "top_p": 0.7,
             "repetition_penalty": 1.2,

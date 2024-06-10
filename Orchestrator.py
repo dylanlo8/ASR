@@ -17,7 +17,12 @@ class LightningTranslator(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.model = TranslateModel()
-
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            "./sea-lion-7b-instruct", 
+            trust_remote_code=True,
+            local_files_only=True
+        )
+        
     def forward(self, audio_embeddings):
         """
         Forward pass of the model. Generates output using the TranslateModel.
@@ -44,13 +49,17 @@ class LightningTranslator(pl.LightningModule):
             loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
         """
 
-        audio_embeddings, labels = batch[0], batch[1]
+        audio_embeddings, transcripts = batch[0], batch[1]
+
+        # Tokenise transcripts
+        tokens = self.tokenizer(transcripts, return_tensors="pt", padding=True)
+        tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
         output = self.forward(audio_embeddings)
         
         # Calculate loss
-        loss = self.calculate_loss(output.logits, labels)
+        loss = self.calculate_loss(output.logits, tokenised_labels)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -139,7 +148,7 @@ class AudioEmbeddingsDataset(torch.utils.data.Dataset):
     
     Attributes:
         audio_embeddings (torch.Tensor): Tensor of audio embeddings.
-        labels (torch.Tensor): Tensor of labels.
+        transcript (torch.Tensor): Tensor of transcripts.
     """
     
     def __init__(self, audio_embeddings, transcripts):
@@ -151,17 +160,8 @@ class AudioEmbeddingsDataset(torch.utils.data.Dataset):
             labels (torch.Tensor): Tensor of tokenised labels.
         """
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            "./sea-lion-7b-instruct", 
-            trust_remote_code=True,
-            local_files_only=True
-        )
-
-        tokens = tokenizer(transcripts, return_tensors="pt", padding=True)
-        tokenised_labels = tokens["input_ids"]
-
         self.audio_embeddings = audio_embeddings
-        self.labels = tokenised_labels
+        self.transcripts = transcripts
 
     def __len__(self):
         """
@@ -182,7 +182,7 @@ class AudioEmbeddingsDataset(torch.utils.data.Dataset):
         Returns:
             tuple: Tuple containing the audio embedding and label.
         """
-        return self.audio_embeddings[idx], self.labels[idx]
+        return self.audio_embeddings[idx], self.transcripts[idx]
 
 if __name__ == "__main__":
     translator = LightningTranslator()
