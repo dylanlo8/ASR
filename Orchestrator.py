@@ -56,15 +56,18 @@ class LightningTranslator(pl.LightningModule):
         tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
-        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-            output = self.forward(audio_embeddings)
+        
+        output = self.forward(audio_embeddings)
 
-            print(output.sequences.shape)
-            print(self.model.decode(output))
-            print(transcripts)
-            
-            # Calculate loss
-            loss = self.calculate_loss(output.logits, tokenised_labels)
+        print(self.model.decode(output))
+        print(transcripts)
+        
+        # Calculate loss
+        loss = self.calculate_loss(output.logits, tokenised_labels)
+
+        # print("Model's state_dict:")
+        # for param_tensor in self.model.state_dict():
+        #     print(param_tensor, "\t", self.model.state_dict()[param_tensor].size())
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -82,18 +85,18 @@ class LightningTranslator(pl.LightningModule):
         """
         audio_embeddings, labels = batch[0], batch[1]
 
-        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-            # Get predicted tokens
-            output = self.forward(audio_embeddings)
-            
-            # Calculate loss
-            loss = self.calculate_loss(output.logits, labels)
+        #with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+        # Get predicted tokens
+        output = self.forward(audio_embeddings)
+        
+        # Calculate loss
+        loss = self.calculate_loss(output.logits, labels)
 
         return loss
     
     def predict_step(self, batch, batch_idx):
-        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-            output = self.forward(batch)
+        
+        output = self.forward(batch)
         
         output_tokens = self.model.decode(output)
         return output_tokens
@@ -109,7 +112,7 @@ class LightningTranslator(pl.LightningModule):
         Returns:
             loss_value (torch.Tensor): Calculated loss value.
         """
-        
+
         generated_logits, labels = padding_process(logits, labels)
 
         # Comment out if using GPU
@@ -133,14 +136,14 @@ class LightningTranslator(pl.LightningModule):
             optimizer (torch.optim.Optimizer): Configured optimizer.
         """
 
-        lr_default = 1.5e-4
+        lr_default = 1.5
         adam_beta1 = 0.9
         adama_beta2 = 0.999
         adam_eps = 1e-8
 
         # TODO: experiment with AdamW
         optimizer = optim.Adam(
-            self.model.parameters(),
+            self.parameters(),
             lr=lr_default,
             betas=(adam_beta1, adama_beta2),
             eps=adam_eps,

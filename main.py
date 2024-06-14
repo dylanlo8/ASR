@@ -9,8 +9,6 @@ import pytorch_lightning as pl
 from lightning.pytorch.loggers import CSVLogger
 import re
 
-torch.set_float32_matmul_precision('medium') 
-
 
 def clean_text(text):
     # Function to clean individual text
@@ -49,7 +47,7 @@ def main():
 
     # Parse through DataLoader
     train_audiodataset = AudioEmbeddingsDataset(train_audio_embeddings, train_transcript)
-    train_audioloader = DataLoader(train_audiodataset, batch_size=8, shuffle=False, num_workers=63)
+    train_audioloader = DataLoader(train_audiodataset, batch_size=4, shuffle=False, num_workers=63)
 
     torch.cuda.empty_cache()
     lightning_translator = LightningTranslator()

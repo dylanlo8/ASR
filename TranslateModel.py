@@ -10,7 +10,7 @@ class Adaptor(torch.nn.Module):
         self.pool1 = torch.nn.AdaptiveAvgPool1d(output_size = 750)
         self.pool2 = torch.nn.AdaptiveAvgPool1d(output_size = 375)
         self.linear = torch.nn.Linear(1024, 4096)
-        self.ln = torch.nn.LayerNorm(1024)
+    
 
     def forward(self, x):
         # Apply adaptive pooling along sequence length
@@ -19,7 +19,7 @@ class Adaptor(torch.nn.Module):
          
         # Apply linear projection along embedding dim
         x = x.permute(0, 2, 1)  # Permute back to the original format (batch, seq, embed_dim)
-        x = self.linear(self.ln(x))
+        x = self.linear(x)
 
         return x
 
