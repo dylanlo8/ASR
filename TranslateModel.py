@@ -9,13 +9,16 @@ class Adaptor(torch.nn.Module):
         super(Adaptor, self).__init__()
         self.pool = torch.nn.AdaptiveAvgPool1d(output_size = 250)
         self.linear = torch.nn.Linear(1024, 4096)
+        self.ln = torch.nn.LayerNorm(1024)
 
     def forward(self, x):
-        # Apply adaptive pooling along dimension 1
-        x = self.pool(x.permute(0, 2, 1))  # Permute input to match AdaptiveAvgPool1d input format
-        x = x.permute(0, 2, 1)  # Permute back to the original format
-        # Apply linear transformation along dimension 2
-        x = self.linear(x)
+        # Apply adaptive pooling along sequence length
+        x = self.pool(x.permute(0, 2, 1))  # Permute input to pool along seq
+         
+        # Apply linear projection along embedding dim
+        x = x.permute(0, 2, 1)  # Permute back to the original format (batch, seq, embed_dim)
+        x = self.linear(self.ln(x))
+
         return x
 
 class TranslateModel(torch.nn.Module):
@@ -78,8 +81,6 @@ class TranslateModel(torch.nn.Module):
         Returns:
             output (dict): Generated output containing sequences and logits.
         """
-
-        print(audio_embeddings.dtype)
         
         # Adapt audio embeddings
         adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, 1500, 1024)

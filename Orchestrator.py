@@ -57,6 +57,10 @@ class LightningTranslator(pl.LightningModule):
 
         # Get predicted tokens
         output = self.forward(audio_embeddings)
+
+        print(output.sequences.shape)
+        print(self.model.decode(output))
+        print(transcripts)
         
         # Calculate loss
         loss = self.calculate_loss(output.logits, tokenised_labels)

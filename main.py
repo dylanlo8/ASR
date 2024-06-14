@@ -28,7 +28,7 @@ def main():
 
     # Parse through DataLoader
     train_audiodataset = AudioEmbeddingsDataset(train_audio_embeddings, train_transcript)
-    train_audioloader = DataLoader(train_audiodataset, batch_size=8, shuffle=True, num_workers=63)
+    train_audioloader = DataLoader(train_audiodataset, batch_size=8, shuffle=False, num_workers=63)
 
     torch.cuda.empty_cache()
     lightning_translator = LightningTranslator()
@@ -41,7 +41,7 @@ def main():
         enable_checkpointing=False, 
         logger = logger
     )
-    
+
     trainer.fit(model=lightning_translator, 
         train_dataloaders=train_audioloader
     )
