@@ -7,13 +7,15 @@ class Adaptor(torch.nn.Module):
     """
     def __init__(self):
         super(Adaptor, self).__init__()
-        self.pool = torch.nn.AdaptiveAvgPool1d(output_size = 250)
+        self.pool1 = torch.nn.AdaptiveAvgPool1d(output_size = 750)
+        self.pool2 = torch.nn.AdaptiveAvgPool1d(output_size = 375)
         self.linear = torch.nn.Linear(1024, 4096)
         self.ln = torch.nn.LayerNorm(1024)
 
     def forward(self, x):
         # Apply adaptive pooling along sequence length
-        x = self.pool(x.permute(0, 2, 1))  # Permute input to pool along seq
+        x = self.pool1(x.permute(0, 2, 1))  # Permute input to pool along seq
+        x = self.pool2(x)
          
         # Apply linear projection along embedding dim
         x = x.permute(0, 2, 1)  # Permute back to the original format (batch, seq, embed_dim)
@@ -125,7 +127,7 @@ class TranslateModel(torch.nn.Module):
         Returns:
             translated_output (list): List of translated English text.
         """
-        translated_output = self.tokenizer.batch_decode(output.sequences, skip_special_tokens=True)
+        translated_output = self.tokenizer.batch_decode(output.sequences, skip_special_tokens=False)
         return translated_output
     
     def embed_prompt(self, prompt):

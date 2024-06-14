@@ -56,14 +56,15 @@ class LightningTranslator(pl.LightningModule):
         tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
-        output = self.forward(audio_embeddings)
+        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+            output = self.forward(audio_embeddings)
 
-        print(output.sequences.shape)
-        print(self.model.decode(output))
-        print(transcripts)
-        
-        # Calculate loss
-        loss = self.calculate_loss(output.logits, tokenised_labels)
+            print(output.sequences.shape)
+            print(self.model.decode(output))
+            print(transcripts)
+            
+            # Calculate loss
+            loss = self.calculate_loss(output.logits, tokenised_labels)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -81,16 +82,18 @@ class LightningTranslator(pl.LightningModule):
         """
         audio_embeddings, labels = batch[0], batch[1]
 
-        # Get predicted tokens
-        output = self.forward(audio_embeddings)
-        
-        # Calculate loss
-        loss = self.calculate_loss(output.logits, labels)
+        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+            # Get predicted tokens
+            output = self.forward(audio_embeddings)
+            
+            # Calculate loss
+            loss = self.calculate_loss(output.logits, labels)
 
         return loss
     
     def predict_step(self, batch, batch_idx):
-        output = self.forward(batch)
+        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+            output = self.forward(batch)
         
         output_tokens = self.model.decode(output)
         return output_tokens
@@ -130,7 +133,7 @@ class LightningTranslator(pl.LightningModule):
             optimizer (torch.optim.Optimizer): Configured optimizer.
         """
 
-        lr_default = 1.5e-3
+        lr_default = 1.5e-4
         adam_beta1 = 0.9
         adama_beta2 = 0.999
         adam_eps = 1e-8
