@@ -65,9 +65,11 @@ class LightningTranslator(pl.LightningModule):
         # Calculate loss
         loss = self.calculate_loss(output.logits, tokenised_labels)
 
-        # print("Model's state_dict:")
-        # for param_tensor in self.model.state_dict():
-        #     print(param_tensor, "\t", self.model.state_dict()[param_tensor].size())
+        # Debugging: Check gradients
+        loss.backward()
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                print(f"Gradients for {name}: {param.grad}")
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -93,6 +95,18 @@ class LightningTranslator(pl.LightningModule):
         loss = self.calculate_loss(output.logits, labels)
 
         return loss
+    
+    def training_epoch_end(self, outputs):
+        optimizer = self.optimizers()
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                print(f"Before update {name}: {param.data}")
+
+        optimizer.step()
+
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                print(f"After update {name}: {param.data}")
     
     def predict_step(self, batch, batch_idx):
         
@@ -123,9 +137,9 @@ class LightningTranslator(pl.LightningModule):
             generated_logits.reshape(-1, generated_logits.shape[-1]), labels.view(-1)
         )
         
-        loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
+        #loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
 
-        return loss_with_grad
+        return loss
         
     
     def configure_optimizers(self):
