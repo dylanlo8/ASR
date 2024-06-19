@@ -8,7 +8,9 @@ import pandas as pd
 import pytorch_lightning as pl
 from lightning.pytorch.loggers import CSVLogger
 import re
+import time
 
+torch.set_float32_matmul_precision('medium')
 
 def clean_text(text):
     # Function to clean individual text
@@ -29,36 +31,42 @@ def clean_text(text):
   
 def main():
     # Set up the dataset
-    # df1 = pd.read_csv("csv_1.csv")
+    df1 = pd.read_csv("csv_1.csv")
     df2 = pd.read_csv("csv_2.csv")
 
-    #concatenated_df = pd.concat([df1, df2], ignore_index=True)
+    concatenated_df = pd.concat([df1, df2], ignore_index=True)
 
-    cleaned_eng_ref = clean_text(df2['eng_reference'].tolist())
+    cleaned_eng_ref = clean_text(concatenated_df['eng_reference'].tolist())
 
     # Parse through AudioProcessor
     processor = Processor()
-    train_dataset = processor.process_audio(df2['trimmed_segment_path'], cleaned_eng_ref)
+    train_dataset = processor.process_audio(concatenated_df['trimmed_segment_path'], cleaned_eng_ref)
     
     # Parse through Whisper Encoder
+    del processor
     torch.cuda.empty_cache()
+
     whisper = Whisper()
     train_audio_embeddings, train_transcript = whisper.embed_audio(train_dataset)
 
     # Parse through DataLoader
     train_audiodataset = AudioEmbeddingsDataset(train_audio_embeddings, train_transcript)
-    train_audioloader = DataLoader(train_audiodataset, batch_size=4, shuffle=False, num_workers=63)
+    train_audioloader = DataLoader(train_audiodataset, batch_size=2, shuffle=False, num_workers=63)
 
+    del whisper
     torch.cuda.empty_cache()
+
     lightning_translator = LightningTranslator()
 
+    time.sleep(5)
+    
     logger = CSVLogger("logs", name="my_exp_name")
 
     trainer = pl.Trainer(devices = 1, 
-        accelerator= 'auto', 
-        accumulate_grad_batches = 4, 
+        accelerator= 'auto',
         enable_checkpointing=False, 
-        logger = logger
+        logger = logger,
+        accumulate_grad_batches=4
     )
 
     trainer.fit(model=lightning_translator, 

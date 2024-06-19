@@ -5,6 +5,9 @@ import torch.optim as optim
 from transformers import AutoTokenizer
 from utils import *
 import torch.nn.functional as F
+import copy
+
+torch.set_grad_enabled(True)
 
 class LightningTranslator(pl.LightningModule):
     """
@@ -34,8 +37,8 @@ class LightningTranslator(pl.LightningModule):
             output (dict): Generated output containing logits and sequences.
         """
 
-        output = self.model(audio_embeddings)
-        return output  # contains logits and sequences
+        logits, mask = self.model(audio_embeddings)
+        return logits, mask
 
     def training_step(self, batch, batch_idx):
         """
@@ -56,22 +59,26 @@ class LightningTranslator(pl.LightningModule):
         tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
-        
-        output = self.forward(audio_embeddings)
-
-        print(self.model.decode(output))
-        print(transcripts)
+        #with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+        output_logits, attention_mask = self(audio_embeddings)
         
         # Calculate loss
-        loss = self.calculate_loss(output.logits, tokenised_labels)
+        loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
 
-        # print("Model's state_dict:")
-        # for param_tensor in self.model.state_dict():
-        #     print(param_tensor, "\t", self.model.state_dict()[param_tensor].size())
+        #self.check_adaptor_gradients()
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
-    
+        
+    def check_adaptor_gradients(self):
+        for name, param in self.model.adaptor.named_parameters():
+            if param.grad is not None:
+                print(f"Adaptor Parameter {name}:")
+                print(f" - Gradient Mean: {param.grad.mean()}")
+                print(f" - Gradient Std: {param.grad.std()}")
+            else:
+                print(f"Adaptor Parameter {name}: No gradient")
+
     def validation_step(self, batch, batch_idx):
         """
         Training step for the model. Calculates the loss and returns it.
@@ -94,6 +101,7 @@ class LightningTranslator(pl.LightningModule):
 
         return loss
     
+    
     def predict_step(self, batch, batch_idx):
         
         output = self.forward(batch)
@@ -101,7 +109,7 @@ class LightningTranslator(pl.LightningModule):
         output_tokens = self.model.decode(output)
         return output_tokens
 
-    def calculate_loss(self, logits, labels):
+    def calculate_loss(self, logits, mask, labels):
         """
         Calculates the cross-entropy loss between predicted logits and output labels.
         
@@ -113,13 +121,15 @@ class LightningTranslator(pl.LightningModule):
             loss_value (torch.Tensor): Calculated loss value.
         """
 
-        generated_logits, labels = padding_process(logits, labels)
+        generated_logits, labels = padding_process(logits, mask, labels)
+
+        # generated_logits.requires_grad = True
 
         # Comment out if using GPU
         # generated_logits = generated_logits.to("cpu")
         # labels = labels.to("cpu")
 
-        loss = F.cross_entropy(
+        loss = torch.nn.CrossEntropyLoss()(
             generated_logits.reshape(-1, generated_logits.shape[-1]), labels.view(-1)
         )
         
@@ -136,14 +146,14 @@ class LightningTranslator(pl.LightningModule):
             optimizer (torch.optim.Optimizer): Configured optimizer.
         """
 
-        lr_default = 1.5
+        lr_default = 1.5e-3
         adam_beta1 = 0.9
         adama_beta2 = 0.999
         adam_eps = 1e-8
 
         # TODO: experiment with AdamW
         optimizer = optim.Adam(
-            self.parameters(),
+            self.model.parameters(),
             lr=lr_default,
             betas=(adam_beta1, adama_beta2),
             eps=adam_eps,

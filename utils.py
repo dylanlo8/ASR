@@ -2,16 +2,23 @@ import torch
 
 # Declare variables as ENV 
 vocab_size = 256000
+prompt_size = 342 # 18 # 342
 
-def process_output_logits(output_logits):
-    # Convert tuple of tensors to a single tensor with 3D dimensions
-    stacked_logits = torch.stack(output_logits)
-    # Remove the last token, since it represents </end_of_text>
-    stacked_logits = stacked_logits[:-1][:][:]
-    # Dimensions of stacked_logits: [max_length_of_generated_seq][batch_size][vocab_size]
-    # Dimensions of transposed: [batch_size][max_length_of_generated_seq][vocab_size]
-    prob_logits_transposed = stacked_logits.transpose(0, 1)
-    return prob_logits_transposed
+def post_process_logits(output_logits, output_mask):
+
+    # Trim output logits to get the output without prompts
+    trimmed_logits = output_logits[:, prompt_size:, :]
+
+    # Create logit that represents eot token
+    eot_logit = torch.zeros((1, 1, vocab_size)).to("cuda")
+    eot_logit[:, :, 1] = 1.0
+    attention_mask_bool = output_mask == 0
+
+    expanded_mask = attention_mask_bool.unsqueeze(-1).expand(-1, -1, vocab_size)
+    
+    logits = torch.where(expanded_mask, eot_logit, trimmed_logits)
+
+    return logits
 
 def compare_generated_and_actual(prob_logits_transposed, target_ids):    
     # Get max length of sequence generated
@@ -37,15 +44,14 @@ def pad_generated_seq(generated_logits, diff_in_len):
     padding_logit[:, :, 1] = 1.0
     padding_logit = padding_logit.repeat(1, diff_in_len, 1).to(generated_logits.device)
     # Pad generated sequence along dimension 1 (length of sequence)
-    print(generated_logits.shape)
-    print(padding_logit.shape)
     padded_logit = torch.cat((generated_logits, padding_logit), dim=1)
     # Return padded logit
     return padded_logit
 
-def padding_process(output_logits, target_ids):
+def padding_process(output_logits, output_mask, target_ids):
     # Transpose output logits to suitable format
-    generated_logits = process_output_logits(output_logits)
+    generated_logits = post_process_logits(output_logits, output_mask)
+
     # Determine which to pad
     diff_in_len = compare_generated_and_actual(generated_logits, target_ids)
 
@@ -55,8 +61,5 @@ def padding_process(output_logits, target_ids):
     # Case 2: Generated sequence is shorter than actual
     elif (diff_in_len < 0):
         generated_logits = pad_generated_seq(generated_logits, abs(diff_in_len))
-    # Case 3: Same maximum length
-    else:
-        print("Max length of generated = Max length of actual in the batch")
 
     return generated_logits, target_ids
