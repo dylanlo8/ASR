@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 import pandas as pd
 import pytorch_lightning as pl
-from lightning.pytorch.loggers import CSVLogger
+from lightning.pytorch.loggers import CSVLogger, TensorBoardLogger
 import re
 import time
 
@@ -51,20 +51,20 @@ def main():
 
     # Parse through DataLoader
     train_audiodataset = AudioEmbeddingsDataset(train_audio_embeddings, train_transcript)
-    train_audioloader = DataLoader(train_audiodataset, batch_size=2, shuffle=False, num_workers=63)
+    train_audioloader = DataLoader(train_audiodataset, batch_size=1, shuffle=False, num_workers=63)
 
     del whisper
     torch.cuda.empty_cache()
 
     lightning_translator = LightningTranslator()
 
-    time.sleep(5)
-    
     logger = CSVLogger("logs", name="my_exp_name")
 
-    trainer = pl.Trainer(devices = 1, 
+    trainer = pl.Trainer(
+        devices = 1, 
         accelerator= 'auto',
-        enable_checkpointing=False, 
+        max_epochs = 20,
+        enable_checkpointing=False,
         logger = logger,
         accumulate_grad_batches=4
     )
@@ -72,6 +72,8 @@ def main():
     trainer.fit(model=lightning_translator, 
         train_dataloaders=train_audioloader
     )
+
+    trainer.save_checkpoint("checkpoints/first_checkpoint.ckpt")
 
 if __name__ == "__main__":
     main()

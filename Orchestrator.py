@@ -12,9 +12,6 @@ torch.set_grad_enabled(True)
 class LightningTranslator(pl.LightningModule):
     """
     PyTorch Lightning Module for training the TranslateModel.
-    
-    Attributes:
-        model (TranslateModel): The translation model to be trained.
     """
     
     def __init__(self):
@@ -27,31 +24,10 @@ class LightningTranslator(pl.LightningModule):
         )
         
     def forward(self, audio_embeddings):
-        """
-        Forward pass of the model. Generates output using the TranslateModel.
-        
-        Args:
-            
-        
-        Returns:
-            output (dict): Generated output containing logits and sequences.
-        """
-
         logits, mask = self.model(audio_embeddings)
         return logits, mask
 
     def training_step(self, batch, batch_idx):
-        """
-        Training step for the model. Calculates the loss and returns it.
-        
-        Args:
-            batch (tuple): Batch of data containing audio embeddings and labels.
-            batch_idx (int): Index of the batch.
-        
-        Returns:
-            loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
-        """
-
         audio_embeddings, transcripts = batch[0], batch[1]
 
         # Tokenise transcripts
@@ -59,17 +35,22 @@ class LightningTranslator(pl.LightningModule):
         tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
-        #with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
         output_logits, attention_mask = self(audio_embeddings)
         
+        print("\n")
+        print(self.tokenizer.batch_decode(self.model.decode(output_logits, attention_mask)))
+        print("\n")
+        print(transcripts)
+        print("\n")
+
         # Calculate loss
         loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
 
         #self.check_adaptor_gradients()
-
+        
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
-        
+
     def check_adaptor_gradients(self):
         for name, param in self.model.adaptor.named_parameters():
             if param.grad is not None:
@@ -79,58 +60,33 @@ class LightningTranslator(pl.LightningModule):
             else:
                 print(f"Adaptor Parameter {name}: No gradient")
 
-    def validation_step(self, batch, batch_idx):
-        """
-        Training step for the model. Calculates the loss and returns it.
-        
-        Args:
-            batch (tuple): Batch of data containing audio embeddings and labels.
-            batch_idx (int): Index of the batch.
-        
-        Returns:
-            loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
-        """
-        audio_embeddings, labels = batch[0], batch[1]
+    # def validation_step(self, batch, batch_idx):
+    #     audio_embeddings, transcripts = batch[0], batch[1]
 
-        #with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-        # Get predicted tokens
-        output = self.forward(audio_embeddings)
-        
-        # Calculate loss
-        loss = self.calculate_loss(output.logits, labels)
+    #     # Tokenise transcripts
+    #     tokens = self.tokenizer(transcripts, return_tensors="pt", padding=True)
+    #     tokenised_labels = tokens["input_ids"].to("cuda")
 
-        return loss
-    
+    #     # Get predicted tokens
+    #     output_logits, attention_mask = self(audio_embeddings)
+        
+    #     # Calculate loss
+    #     loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
+
+    #     return loss
     
     def predict_step(self, batch, batch_idx):
-        
-        output = self.forward(batch)
-        
+        audio_embeddings, _ = batch[0], batch[1]
+        output = self(audio_embeddings)
         output_tokens = self.model.decode(output)
         return output_tokens
 
     def calculate_loss(self, logits, mask, labels):
-        """
-        Calculates the cross-entropy loss between predicted logits and output labels.
-        
-        Args:
-            logits (torch.Tensor): Predicted logits from the model.
-            labels (torch.Tensor): Ground truth labels.
-        
-        Returns:
-            loss_value (torch.Tensor): Calculated loss value.
-        """
-
         generated_logits, labels = padding_process(logits, mask, labels)
 
-        # generated_logits.requires_grad = True
-
-        # Comment out if using GPU
-        # generated_logits = generated_logits.to("cpu")
-        # labels = labels.to("cpu")
-
-        loss = torch.nn.CrossEntropyLoss()(
-            generated_logits.reshape(-1, generated_logits.shape[-1]), labels.view(-1)
+        # Ignore padding tokens
+        loss = torch.nn.CrossEntropyLoss(ignore_index = 3)(
+            generated_logits.permute(0, 2, 1), labels
         )
         
         loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
@@ -139,13 +95,6 @@ class LightningTranslator(pl.LightningModule):
         
     
     def configure_optimizers(self):
-        """
-        Configures the optimizer for training.
-        
-        Returns:
-            optimizer (torch.optim.Optimizer): Configured optimizer.
-        """
-
         lr_default = 1.5e-3
         adam_beta1 = 0.9
         adama_beta2 = 0.999

@@ -149,6 +149,7 @@ class TranslateModel(torch.nn.Module):
         # Softmax along vocab 
         probs = logits.softmax(dim=-1)
 
+
         # Sample from the probability distribution
         sampled_tokens = torch.argmax(probs, -1)
         
