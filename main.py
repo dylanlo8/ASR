@@ -63,10 +63,10 @@ def main():
     trainer = pl.Trainer(
         devices = 1, 
         accelerator= 'auto',
-        max_epochs = 20,
+        max_epochs = 8,
         enable_checkpointing=False,
         logger = logger,
-        accumulate_grad_batches=1
+        accumulate_grad_batches=4
     )
 
     trainer.fit(model=lightning_translator, 

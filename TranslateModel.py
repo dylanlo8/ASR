@@ -133,7 +133,7 @@ class TranslateModel(torch.nn.Module):
                     eos_mask[batch_idx] = True
 
                     # all tokens from here set to 0
-                    if i < max_iterations: # prevent out of bounds error
+                    if i < max_tokens_to_generate: # prevent out of bounds error
                         attention_mask[batch_idx, i+1:] = 0 # ele at i represent end_of_text token
                     
             # Check if all sequences have generated eos_token_id
