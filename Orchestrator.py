@@ -23,8 +23,8 @@ class LightningTranslator(pl.LightningModule):
             local_files_only=True
         )
         
-    def forward(self, audio_embeddings):
-        logits, mask = self.model(audio_embeddings)
+    def forward(self, audio_embeddings, transcripts):
+        logits, mask = self.model(audio_embeddings, transcripts)
         return logits, mask
 
     def training_step(self, batch, batch_idx):
@@ -35,7 +35,7 @@ class LightningTranslator(pl.LightningModule):
         tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
-        output_logits, attention_mask = self(audio_embeddings)
+        output_logits, attention_mask = self(audio_embeddings, transcripts)
         
         print("\n")
         print(self.tokenizer.batch_decode(self.model.decode(output_logits, attention_mask)))
@@ -46,7 +46,7 @@ class LightningTranslator(pl.LightningModule):
         # Calculate loss
         loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
 
-        #self.check_adaptor_gradients()
+        self.check_adaptor_gradients()
         
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -89,9 +89,9 @@ class LightningTranslator(pl.LightningModule):
             generated_logits.permute(0, 2, 1), labels
         )
         
-        loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
+        # loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
 
-        return loss_with_grad
+        return loss
         
     
     def configure_optimizers(self):

@@ -11,7 +11,7 @@ def post_process_logits(output_logits, output_mask):
 
     # Create logit that represents eot token
     pad_logit = torch.zeros((1, 1, vocab_size)).to("cuda")
-    pad_logit[:, :, 3] = 1.0
+    pad_logit[:, :, 3] = 100.0
     attention_mask_bool = output_mask == 0
 
     expanded_mask = attention_mask_bool.unsqueeze(-1).expand(-1, -1, vocab_size)

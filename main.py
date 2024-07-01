@@ -31,8 +31,8 @@ def clean_text(text):
   
 def main():
     # Set up the dataset
-    df1 = pd.read_csv("csv_1.csv")
-    df2 = pd.read_csv("csv_2.csv")
+    df1 = pd.read_csv("csv_1.csv").head(250)
+    df2 = pd.read_csv("csv_2.csv").head(0)
 
     concatenated_df = pd.concat([df1, df2], ignore_index=True)
 
@@ -66,7 +66,7 @@ def main():
         max_epochs = 20,
         enable_checkpointing=False,
         logger = logger,
-        accumulate_grad_batches=4
+        accumulate_grad_batches=1
     )
 
     trainer.fit(model=lightning_translator, 

@@ -82,7 +82,7 @@ class TranslateModel(torch.nn.Module):
         for param in self.adaptor.parameters():
             param.requires_grad = True
 
-    def forward(self, audio_embeddings, max_iterations = 140, eos_token_id = 1):
+    def forward(self, audio_embeddings, transcripts, eos_token_id = 1):
         """
         Forward pass of the model. Adapts audio embeddings and generates output using the LLM.
         
@@ -92,6 +92,9 @@ class TranslateModel(torch.nn.Module):
         Returns:
             output (dict): Generated output containing sequences and logits.
         """
+
+        labels = self.tokenizer(transcripts, return_tensors='pt')['input_ids']
+        max_tokens_to_generate = labels.size(1)
 
         # Adapt audio embeddings
         adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, adapted_seq, 1024)
@@ -108,14 +111,11 @@ class TranslateModel(torch.nn.Module):
 
         inputs_embeds = cat_embeddings
         eos_mask = torch.zeros(batch_size, dtype=torch.bool)
-        attention_mask = torch.ones((batch_size, max_iterations)).to("cuda")
+        attention_mask = torch.ones((batch_size, max_tokens_to_generate)).to("cuda")
 
-        for i in range(max_iterations):
-            torch.cuda.empty_cache()
+        for i in range(max_tokens_to_generate):
             # Forward pass
             res = self.llm(inputs_embeds=inputs_embeds)
-            
-            torch.cuda.empty_cache()
 
             # Sample using multinomial on the logits of the last tokens in each sequence
             sampled_token = torch.argmax(res.logits[:, -1, :].softmax(dim=-1), -1).view(-1, 1)
