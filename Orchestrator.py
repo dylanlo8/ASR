@@ -22,6 +22,8 @@ class LightningTranslator(pl.LightningModule):
             trust_remote_code=True,
             local_files_only=True
         )
+
+        # self.automatic_optimization = False
         
     def forward(self, audio_embeddings, transcripts):
         logits, mask = self.model(audio_embeddings, transcripts)
@@ -43,11 +45,17 @@ class LightningTranslator(pl.LightningModule):
         print(transcripts)
         print("\n")
 
+        # opt = self.optimizers
+        # opt.zero_grad()
+
         # Calculate loss
         loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
 
-        self.check_adaptor_gradients()
-        
+        # self.manual_backward(loss)
+        # opt.step()
+        # sch = self.lr_schedulers()
+        # sch.step()
+
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
@@ -59,28 +67,12 @@ class LightningTranslator(pl.LightningModule):
                 print(f" - Gradient Std: {param.grad.std()}")
             else:
                 print(f"Adaptor Parameter {name}: No gradient")
-
-    # def validation_step(self, batch, batch_idx):
-    #     audio_embeddings, transcripts = batch[0], batch[1]
-
-    #     # Tokenise transcripts
-    #     tokens = self.tokenizer(transcripts, return_tensors="pt", padding=True)
-    #     tokenised_labels = tokens["input_ids"].to("cuda")
-
-    #     # Get predicted tokens
-    #     output_logits, attention_mask = self(audio_embeddings)
-        
-    #     # Calculate loss
-    #     loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
-
-    #     return loss
     
     def predict_step(self, batch, batch_idx):
-        audio_embeddings, _ = batch[0], batch[1]
-        output = self(audio_embeddings)
-        output_tokens = self.model.decode(output)
-        return output_tokens
-
+        audio_embeddings, transcripts = batch[0], batch[1]
+        output_logits, attention_mask = self(audio_embeddings, transcripts)
+        return self.tokenizer.batch_decode(self.model.decode(output_logits, attention_mask))
+        
     def calculate_loss(self, logits, mask, labels):
         generated_logits, labels = padding_process(logits, mask, labels)
 
@@ -108,7 +100,9 @@ class LightningTranslator(pl.LightningModule):
             eps=adam_eps,
         )
 
-        return optimizer
+        lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.9)
+
+        return [optimizer], [{"scheduler" : lr_scheduler, "interval" : "epoch"}]
 
 
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):
