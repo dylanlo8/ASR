@@ -80,8 +80,6 @@ class LightningTranslator(pl.LightningModule):
         loss = torch.nn.CrossEntropyLoss(ignore_index = 3)(
             generated_logits.permute(0, 2, 1), labels
         )
-        
-        # loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
 
         return loss
         

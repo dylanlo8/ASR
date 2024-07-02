@@ -6,8 +6,8 @@ import torch
 from torch.utils.data import DataLoader
 import pandas as pd
 import pytorch_lightning as pl
-from lightning.pytorch.loggers import CSVLogger, TensorBoardLogger
-from lightning.pytorch.callbacks import LearningRateMonitor
+from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
+from pytorch_lightning.callbacks import LearningRateMonitor
 import re
 import time
 
