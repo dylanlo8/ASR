@@ -70,8 +70,15 @@ class LightningTranslator(pl.LightningModule):
     
     def predict_step(self, batch, batch_idx):
         audio_embeddings, transcripts = batch[0], batch[1]
-        output_logits, attention_mask = self(audio_embeddings, transcripts)
-        return self.tokenizer.batch_decode(self.model.decode(output_logits, attention_mask))
+        output = self.model.predict(audio_embeddings)
+        
+        print("\n")
+        print(self.tokenizer.batch_decode(output, skip_special_tokens=False))
+        print("\n")
+        print(transcripts)
+        print("\n")
+
+        return output
         
     def calculate_loss(self, logits, mask, labels):
         generated_logits, labels = padding_process(logits, mask, labels)
@@ -80,10 +87,9 @@ class LightningTranslator(pl.LightningModule):
         loss = torch.nn.CrossEntropyLoss(ignore_index = 3)(
             generated_logits.permute(0, 2, 1), labels
         )
-
+        
         return loss
         
-    
     def configure_optimizers(self):
         lr_default = 1.5e-3
         adam_beta1 = 0.9

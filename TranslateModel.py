@@ -82,6 +82,16 @@ class TranslateModel(torch.nn.Module):
         for param in self.adaptor.parameters():
             param.requires_grad = True
 
+        self.generation_kwargs = {
+            "do_sample": False,  # set to true if temperature is not 0
+            "temperature": None,
+            "max_new_tokens": 64,
+            "top_k": 20,
+            "top_p": 0.9,
+            "repetition_penalty": 1.2,
+            "eos_token_id" : self.tokenizer.eos_token_id
+        }
+
     def forward(self, audio_embeddings, transcripts, eos_token_id = 1):
         """
         Forward pass of the model. Adapts audio embeddings and generates output using the LLM.
@@ -98,6 +108,7 @@ class TranslateModel(torch.nn.Module):
 
         # Adapt audio embeddings
         adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, adapted_seq, 1024)
+        adapted_audio_embeddings = adapted_audio_embeddings.to(self.device_type)
 
         batch_size = adapted_audio_embeddings.size(0)  # get batch_size of audio embeddings
 
@@ -112,7 +123,7 @@ class TranslateModel(torch.nn.Module):
         inputs_embeds = cat_embeddings
         eos_mask = torch.zeros(batch_size, dtype=torch.bool)
         attention_mask = torch.ones((batch_size, max_tokens_to_generate)).to("cuda")
-
+        
         for i in range(max_tokens_to_generate):
             # Forward pass
             res = self.llm(inputs_embeds=inputs_embeds)
@@ -143,12 +154,31 @@ class TranslateModel(torch.nn.Module):
 
         return res.logits, attention_mask  # contains sequences and logits properties
     
+    def predict(self, audio_embeddings):
+        # Adapt audio embeddings
+        adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, adapted_seq, 1024)
+
+        batch_size = adapted_audio_embeddings.size(0)  # get batch_size of audio embeddings
+
+        # Concatenate audio embeddings with embedded prefix and suffix prompt template
+        cat_embeddings = torch.cat([
+            self.prefix_embeddings.repeat(batch_size, 1, 1), 
+            adapted_audio_embeddings, 
+            self.suffix_embeddings.repeat(batch_size, 1, 1)], 
+            dim=1
+        )
+
+        output = self.llm.generate(
+            inputs_embeds = cat_embeddings,
+            **self.generation_kwargs)
+        
+        return output
+    
     def decode(self, logits, attention_mask):
         logits = post_process_logits(logits, attention_mask)
         
         # Softmax along vocab 
         probs = logits.softmax(dim=-1)
-
 
         # Sample from the probability distribution
         sampled_tokens = torch.argmax(probs, -1)

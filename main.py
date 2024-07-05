@@ -6,8 +6,9 @@ import torch
 from torch.utils.data import DataLoader
 import pandas as pd
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
+from lightning.pytorch.loggers import CSVLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint
 import re
 import time
 
@@ -34,8 +35,9 @@ def main():
     # Set up the dataset
     df1 = pd.read_csv("csv_1.csv")
     df2 = pd.read_csv("csv_2.csv")
+    df3 = pd.read_csv("csv_3.csv")
 
-    concatenated_df = pd.concat([df1, df2], ignore_index=True)
+    concatenated_df = pd.concat([df1, df2, df3], ignore_index=True)
     cleaned_eng_ref = clean_text(concatenated_df['eng_reference'].tolist())
 
     # STEP 1: Parse through AudioProcessor
@@ -61,14 +63,19 @@ def main():
 
     logger = CSVLogger("logs", name = "my_exp_name")
     lr_monitor = LearningRateMonitor(logging_interval = "epoch")
+    checkpoint_callback = ModelCheckpoint(
+        every_n_epochs = 10,
+        dirpath="my_checkpoints/",
+        filename="checkpoint",
+    )
 
     trainer = pl.Trainer(
         devices = 1, 
         accelerator = 'auto',
-        max_epochs = 20,
-        enable_checkpointing = False,
+        max_epochs = 30,
+        enable_checkpointing = True,
         logger = logger,
-        callbacks= [lr_monitor],
+        callbacks= [lr_monitor, checkpoint_callback],
         accumulate_grad_batches = 4
     )
 
@@ -77,7 +84,7 @@ def main():
         train_dataloaders=train_audioloader
     )
 
-    trainer.save_checkpoint("checkpoints/first_checkpoint.ckpt")
+    trainer.save_checkpoint("my_checkpoints/final_checkpoint.ckpt")
 
 if __name__ == "__main__":
     main()
