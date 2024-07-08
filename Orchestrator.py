@@ -6,12 +6,18 @@ from transformers import AutoTokenizer
 from utils import *
 import torch.nn.functional as F
 
+torch.set_grad_enabled(True)
+
 class LightningTranslator(pl.LightningModule):
     """
-    PyTorch Lightning Module for training the TranslateModel.
-    
+    PyTorch Lightning module for training and inference of the TranslateModel.
+
+    This class provides methods for training, validation, prediction, and configuring optimizers for the TranslateModel. It handles the 
+    forward pass, loss calculation, and gradient logging.
+
     Attributes:
-        model (TranslateModel): The translation model to be trained.
+        model (TranslateModel): Instance of the TranslateModel class.
+        tokenizer (AutoTokenizer): Tokenizer for the pre-trained language model.
     """
     
     def __init__(self):
@@ -22,134 +28,136 @@ class LightningTranslator(pl.LightningModule):
             trust_remote_code=True,
             local_files_only=True
         )
+
+        # self.automatic_optimization = False
         
-    def forward(self, audio_embeddings):
+    def forward(self, audio_embeddings, transcripts):
         """
-        Forward pass of the model. Generates output using the TranslateModel.
+        Forward pass for generating logits and attention mask from audio embeddings and transcripts.
         
         Args:
-            
+            audio_embeddings (torch.Tensor): Tensor containing audio embeddings.
+            transcripts (list of str): List of transcripts corresponding to the audio inputs.
         
         Returns:
-            output (dict): Generated output containing logits and sequences.
+            tuple: Logits tensor and attention mask tensor.
         """
-
-        output = self.model(audio_embeddings)
-        return output  # contains logits and sequences
+        logits, mask = self.model(audio_embeddings, transcripts)
+        return logits, mask
 
     def training_step(self, batch, batch_idx):
         """
-        Training step for the model. Calculates the loss and returns it.
-        
+        Training step for processing a batch of audio embeddings and transcripts.
+
         Args:
-            batch (tuple): Batch of data containing audio embeddings and labels.
+            batch (tuple): Batch of data containing audio embeddings and transcripts tuples.
             batch_idx (int): Index of the batch.
         
         Returns:
-            loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
+            torch.Tensor: Calculated loss for the batch.
         """
-
         audio_embeddings, transcripts = batch[0], batch[1]
 
-        # Tokenise transcripts
+        # Tokenize transcripts
         tokens = self.tokenizer(transcripts, return_tensors="pt", padding=True)
         tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
+        output_logits, attention_mask = self(audio_embeddings, transcripts)
         
-        output = self.forward(audio_embeddings)
-
-        print(self.model.decode(output))
+        # Previewing output during training
+        print("\n")
+        tokenised_output = self.model.decode(output_logits, attention_mask)
+        # decodes the tokenised output into string format
+        print(self.tokenizer.batch_decode(tokenised_output))
+        print("\n")
         print(transcripts)
-        
-        # Calculate loss
-        loss = self.calculate_loss(output.logits, tokenised_labels)
+        print("\n")
 
-        # print("Model's state_dict:")
-        # for param_tensor in self.model.state_dict():
-        #     print(param_tensor, "\t", self.model.state_dict()[param_tensor].size())
+        # Calculate cross entropy loss
+        loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
-    
-    def validation_step(self, batch, batch_idx):
+
+    def check_adaptor_gradients(self):
         """
-        Training step for the model. Calculates the loss and returns it.
-        
+        Test function to check whether gradients are being backpropogated to the Adaptor module of the model.
+        """
+        for name, param in self.model.adaptor.named_parameters():
+            if param.grad is not None:
+                print(f"Adaptor Parameter {name}:")
+                print(f" - Gradient Mean: {param.grad.mean()}")
+                print(f" - Gradient Std: {param.grad.std()}")
+            else:
+                print(f"Adaptor Parameter {name}: No gradient")
+    
+    def predict_step(self, batch, batch_idx):
+        """
+        Prediction step for processing a batch of audio embeddings and transcripts.
+
         Args:
-            batch (tuple): Batch of data containing audio embeddings and labels.
+            batch (tuple): Batch of data containing audio embeddings and transcripts.
             batch_idx (int): Index of the batch.
         
         Returns:
-            loss (OrderedDict): OrderedDict containing the loss value, progress bar dictionary, and log dictionary.
+            torch.Tensor: Generated output from the model.
         """
-        audio_embeddings, labels = batch[0], batch[1]
-
-        #with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-        # Get predicted tokens
-        output = self.forward(audio_embeddings)
+        audio_embeddings, transcripts = batch[0], batch[1]
+        output = self.model.predict(audio_embeddings)
         
-        # Calculate loss
-        loss = self.calculate_loss(output.logits, labels)
+        print("\n")
+        print(self.tokenizer.batch_decode(output, skip_special_tokens=False))
+        print("\n")
+        print(transcripts)
+        print("\n")
 
-        return loss
-    
-    def predict_step(self, batch, batch_idx):
+        return output
         
-        output = self.forward(batch)
-        
-        output_tokens = self.model.decode(output)
-        return output_tokens
-
-    def calculate_loss(self, logits, labels):
+    def calculate_loss(self, logits, mask, tokenised_labels):
         """
-        Calculates the cross-entropy loss between predicted logits and output labels.
-        
+        Calculates the cross entropy loss between predicted logits and tokenized labels.
+
         Args:
             logits (torch.Tensor): Predicted logits from the model.
-            labels (torch.Tensor): Ground truth labels.
+            mask (torch.Tensor): Attention mask for the logits.
+            labels (torch.Tensor): Tokenized labels for the transcripts.
         
         Returns:
-            loss_value (torch.Tensor): Calculated loss value.
+            torch.Tensor: Calculated Cross Entropy Loss.
         """
+        generated_logits, tokenised_labels = padding_process(logits, mask, tokenised_labels)
 
-        generated_logits, labels = padding_process(logits, labels)
-
-        # Comment out if using GPU
-        # generated_logits = generated_logits.to("cpu")
-        # labels = labels.to("cpu")
-
-        loss = F.cross_entropy(
-            generated_logits.reshape(-1, generated_logits.shape[-1]), labels.view(-1)
+        # Ignore padding tokens
+        # Require permuting logits into (batch_size, vocab, sequence_length)
+        loss = torch.nn.CrossEntropyLoss(ignore_index=3)(
+            generated_logits.permute(0, 2, 1), tokenised_labels
         )
         
-        loss_with_grad = torch.tensor(loss.item(), requires_grad=True)
-
-        return loss_with_grad
+        return loss
         
-    
     def configure_optimizers(self):
         """
-        Configures the optimizer for training.
-        
-        Returns:
-            optimizer (torch.optim.Optimizer): Configured optimizer.
-        """
+        Configures the optimizers and learning rate schedulers for training.
 
-        lr_default = 1.5
+        Returns:
+            tuple: Optimizer and learning rate scheduler.
+        """
+        lr_default = 1.5e-3
         adam_beta1 = 0.9
         adama_beta2 = 0.999
         adam_eps = 1e-8
 
-        # TODO: experiment with AdamW
         optimizer = optim.Adam(
-            self.parameters(),
+            self.model.parameters(),
             lr=lr_default,
             betas=(adam_beta1, adama_beta2),
             eps=adam_eps,
         )
 
-        return optimizer
+        lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+
+        return [optimizer], [{"scheduler": lr_scheduler, "interval": "epoch"}]
 
 
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):
@@ -163,13 +171,12 @@ class AudioEmbeddingsDataset(torch.utils.data.Dataset):
     
     def __init__(self, audio_embeddings, transcripts):
         """
-        Initializes the AudioEmbeddingsDataset with audio embeddings and audio transcript.
+        Initializes the AudioEmbeddingsDataset with audio embeddings and audio transcripts.
         
         Args:
             audio_embeddings (torch.Tensor): Tensor of audio embeddings.
-            labels (torch.Tensor): Tensor of tokenised labels.
+            transcripts (torch.Tensor): Tensor of transcripts.
         """
-
         self.audio_embeddings = audio_embeddings
         self.transcripts = transcripts
 
@@ -184,13 +191,13 @@ class AudioEmbeddingsDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         """
-        Retrieves the audio embedding and label at the specified index.
+        Retrieves the audio embedding and transcript at the specified index.
         
         Args:
             idx (int): Index of the sample to retrieve.
         
         Returns:
-            tuple: Tuple containing the audio embedding and label.
+            tuple: Tuple containing the audio embedding and transcript.
         """
         return self.audio_embeddings[idx], self.transcripts[idx]
 

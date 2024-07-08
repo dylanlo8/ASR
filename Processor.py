@@ -1,25 +1,18 @@
 from datasets import Dataset, Audio
-from transformers import AutoProcessor, WhisperModel, AutoTokenizer, AutoModelForCausalLM, AutoModel
-import torch
-import pytorch_lightning as pl
+from transformers import AutoProcessor
 
 class Processor:
     """
-    Class for processing audio files and preparing them for input into a model.
+    Class for processing Audio .wav files and preparing them as input features into Whisper's Automatic
+    Speech Recognition Model.
     
     Attributes:
         audio_processor (AutoProcessor): Processor for extracting features from audio files.
     """
     
-    def __init__(self, audio_encoder="./whisper-medium"):
-        """
-        Initializes the Processor with the specified pre-trained audio encoder.
-        
-        Args:
-            audio_encoder (str): Path to the pre-trained audio encoder.
-        """
+    def __init__(self, path_to_whisper_model = './whisper-medium'):
         self.audio_processor = AutoProcessor.from_pretrained(
-            audio_encoder, 
+            path_to_whisper_model, 
             local_files_only=True
         )
     
@@ -32,8 +25,12 @@ class Processor:
             labels (list): List of labels corresponding to the audio files.
         
         Returns:
-            Dataset: Dataset containing input features, attention masks, and labels.
+            audio_dataset (Dataset): Dataset containing input_features, attention masks, and labels.
+                - input_features (torch.Tensor): Tensor containing extracted input features from the audio files.
+                - attention_mask (torch.Tensor): Tensor containing attention masks for the input features.
+                - labels (list of str): List of labels corresponding to the audio files.
         """
+
         print("Processing audio files")
 
         def prepare_dataset(batch):
@@ -56,6 +53,7 @@ class Processor:
 
             batch["input_features"] = features['input_features'][0]
             batch["attention_mask"] = features["attention_mask"][0]
+            batch["labels"] = batch["labels"] + " "
             return batch
         
         audio_dataset = Dataset.from_dict({
@@ -63,9 +61,8 @@ class Processor:
             "labels": labels
         })
 
+        # Cast 
         audio_dataset = audio_dataset.cast_column("audio", Audio()).map(prepare_dataset)
-
-        del self.audio_processor
 
         # Contains input_features, attention_mask, labels
         return audio_dataset
