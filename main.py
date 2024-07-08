@@ -47,7 +47,6 @@ def main():
     # STEP 2: Parse through Whisper Encoder
     del processor
     torch.cuda.empty_cache()
-
     whisper = Whisper()
     train_audio_embeddings, train_transcript = whisper.embed_audio(train_dataset)
 
@@ -58,7 +57,7 @@ def main():
     del whisper
     torch.cuda.empty_cache()
 
-    # STEP 4: Set up Orchestrator
+    # STEP 4: Set up Pytorch Lightning Orchestrator
     lightning_translator = LightningTranslator()
 
     logger = CSVLogger("logs", name = "my_exp_name")
