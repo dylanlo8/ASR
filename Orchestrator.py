@@ -143,7 +143,7 @@ class LightningTranslator(pl.LightningModule):
         Returns:
             tuple: Optimizer and learning rate scheduler.
         """
-        lr_default = 1.5e-3
+        lr_default = 6e-4
         adam_beta1 = 0.9
         adama_beta2 = 0.999
         adam_eps = 1e-8
@@ -157,7 +157,8 @@ class LightningTranslator(pl.LightningModule):
 
         lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
-        return [optimizer], [{"scheduler": lr_scheduler, "interval": "epoch"}]
+        return [optimizer], [{"scheduler": lr_scheduler, "interval": "epoch", "frequency": 1}]
+        # return [optimizer]
 
 
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):

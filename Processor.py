@@ -53,7 +53,7 @@ class Processor:
 
             batch["input_features"] = features['input_features'][0]
             batch["attention_mask"] = features["attention_mask"][0]
-            batch["labels"] = batch["labels"] + " "
+            batch["labels"] = batch["labels"] + " <|endoftext|>"
             return batch
         
         audio_dataset = Dataset.from_dict({

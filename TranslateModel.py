@@ -95,8 +95,8 @@ class TranslateModel(torch.nn.Module):
             param.requires_grad = False
 
         # Embedding the SeaLion LLM Prompt Template
-        self.prefix_embeddings = self.embed_prompt("### USER:\nTranslate the following to English. ")
-        self.suffix_embeddings = self.embed_prompt("\n\n### RESPONSE:\n")
+        self.prefix_embeddings = self.embed_prompt("### USER:\nTranslate the following to English. ").to(self.device_type)
+        self.suffix_embeddings = self.embed_prompt("\n\n### RESPONSE:\n").to(self.device_type)
 
         # Initialise the adaptor
         self.adaptor = Adaptor()
@@ -108,9 +108,9 @@ class TranslateModel(torch.nn.Module):
         self.generation_kwargs = {
             "do_sample": False,  # set to true if temperature is not 0
             "temperature": None,
-            "max_new_tokens": 64,
-            "top_k": 20,
-            "top_p": 0.9,
+            "max_new_tokens": 256,
+            "top_k": 50,
+            "top_p": 0.7,
             "repetition_penalty": 1.2,
             "eos_token_id": self.tokenizer.eos_token_id
         }
@@ -206,8 +206,9 @@ class TranslateModel(torch.nn.Module):
             torch.Tensor: Generated tokenised output of dimensions (batch_size, sequence_length). 
             This tensor needs to be decoded by the tokeniser to convert it into string output.
         """
+
         # Adapt audio embeddings
-        adapted_audio_embeddings = self.adaptor(audio_embeddings)  # (batch_size, adapted_seq, 1024)
+        adapted_audio_embeddings = self.adaptor(audio_embeddings.to(self.device_type))  # (batch_size, adapted_seq, 1024)
 
         batch_size = adapted_audio_embeddings.size(0)  # get batch_size of audio embeddings
 

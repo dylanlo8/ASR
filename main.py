@@ -33,9 +33,9 @@ def clean_text(text):
   
 def main():
     # Set up the dataset
-    df1 = pd.read_csv("csv_1.csv")
-    df2 = pd.read_csv("csv_2.csv")
-    df3 = pd.read_csv("csv_3.csv")
+    df1 = pd.read_csv("csv_1.csv").head(0)
+    df2 = pd.read_csv("csv_2.csv").head(0)
+    df3 = pd.read_csv("csv_3.csv").head(2000)
 
     concatenated_df = pd.concat([df1, df2, df3], ignore_index=True)
     cleaned_eng_ref = clean_text(concatenated_df['eng_reference'].tolist())
@@ -47,6 +47,7 @@ def main():
     # STEP 2: Parse through Whisper Encoder
     del processor
     torch.cuda.empty_cache()
+
     whisper = Whisper()
     train_audio_embeddings, train_transcript = whisper.embed_audio(train_dataset)
 
@@ -57,33 +58,41 @@ def main():
     del whisper
     torch.cuda.empty_cache()
 
-    # STEP 4: Set up Pytorch Lightning Orchestrator
+    # STEP 4: Set up Orchestrator
     lightning_translator = LightningTranslator()
 
+    # Load pretrained adaptor weights
+    checkpoint = torch.load("checkpoints/with_lr_scheduler.ckpt")
+    adaptor_weights = {k[len("model.adaptor."):]: v for k, v in checkpoint["state_dict"].items() if k.startswith("model.adaptor")}
+    lightning_translator.model.adaptor.load_state_dict(adaptor_weights)
+
+    # Initialise extra training params
     logger = CSVLogger("logs", name = "my_exp_name")
     lr_monitor = LearningRateMonitor(logging_interval = "epoch")
     checkpoint_callback = ModelCheckpoint(
-        every_n_epochs = 10,
+        every_n_epochs = 5,
         dirpath="my_checkpoints/",
         filename="checkpoint",
     )
 
     trainer = pl.Trainer(
-        devices = 1, 
+        devices = 1,
         accelerator = 'auto',
-        max_epochs = 30,
+        max_epochs = 20,
         enable_checkpointing = True,
         logger = logger,
         callbacks= [lr_monitor, checkpoint_callback],
-        accumulate_grad_batches = 4
+        accumulate_grad_batches = 4,
     )
 
     # STEP 5: Train Model
-    trainer.fit(model=lightning_translator, 
-        train_dataloaders=train_audioloader
+    trainer.fit(
+        model=lightning_translator, 
+        train_dataloaders=train_audioloader,
+        # ckpt_path = 'my_checkpoints/checkpoint.ckpt',
     )
 
-    trainer.save_checkpoint("my_checkpoints/final_checkpoint.ckpt")
+    trainer.save_checkpoint("checkpoints/with_lr_scheduler_and_finetuning.ckpt")
 
 if __name__ == "__main__":
     main()

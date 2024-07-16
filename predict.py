@@ -1,6 +1,6 @@
 from Whisper import Whisper
 from Processor import Processor
-from TranslateModel import TranslateModel
+from TranslateModel import TranslateModel, Adaptor
 from Orchestrator import AudioEmbeddingsDataset, LightningTranslator
 import torch
 from torch.utils.data import DataLoader
@@ -57,27 +57,18 @@ def main():
     del whisper
     torch.cuda.empty_cache()
 
-    model = LightningTranslator.load_from_checkpoint(checkpoint_path="checkpoints/first_checkpoint.ckpt")
+    model = LightningTranslator.load_from_checkpoint(checkpoint_path="checkpoints/with_lr_scheduler.ckpt").to("cuda")
 
-    trainer = pl.Trainer(
-        devices = 1, 
-        accelerator = 'auto',
-        max_epochs = 20,
-        enable_checkpointing = False,
-        accumulate_grad_batches = 4
-    )
+    # trainer = pl.Trainer(
+    #     devices = 1, 
+    #     accelerator = 'auto',
+    #     max_epochs = 20,
+    #     enable_checkpointing = False,
+    #     accumulate_grad_batches = 4
+    # )
 
-    trainer.predict(model, dataloaders = test_audioloader)
-
-    # disable randomness, dropout, etc...
-    # model.eval()
-
-    # model.predict_step(next(iter(test_audioloader)), 0)
-    # predict with the model    
-    #y_hat = model(audio_embeddings, transcript)
-
-    #print(y_hat)
-
+    for batch_idx, batch in enumerate(test_audioloader):
+        model.predict_step(batch, batch_idx)
 
 if __name__ == "__main__":
     main()
