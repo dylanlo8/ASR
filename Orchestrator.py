@@ -78,6 +78,9 @@ class LightningTranslator(pl.LightningModule):
         loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
+        #self.check_adaptor_gradients()
+
         return loss
 
     def check_adaptor_gradients(self):
@@ -105,9 +108,25 @@ class LightningTranslator(pl.LightningModule):
         """
         audio_embeddings, transcripts = batch[0], batch[1]
         output = self.model.predict(audio_embeddings)
+
+        # rephrase_prompt_prefix = self.tokenizer("### USER:\nTranslate the following to English. ", return_tensors='pt')
+        # rephrase_prompt_suffix = self.tokenizer("\n\n### RESPONSE:\n", return_tensors='pt')
         
+        # tokenised_full_prompt = torch.cat([
+        #     rephrase_prompt_prefix['input_ids'], 
+        #     output[0], 
+        #     rephrase_prompt_suffix['input_ids']], 
+        #     dim=1
+        # )
+
+        # rephrased_output = self.model.llm.generate(
+        #     tokenised_full_prompt,
+        #     **self.model.generation_kwargs,
+        # )
+
         print("\n")
         print(self.tokenizer.batch_decode(output, skip_special_tokens=False))
+
         print("\n")
         print(transcripts)
         print("\n")
@@ -143,7 +162,7 @@ class LightningTranslator(pl.LightningModule):
         Returns:
             tuple: Optimizer and learning rate scheduler.
         """
-        lr_default = 6e-4
+        lr_default = 1.5e-3
         adam_beta1 = 0.9
         adama_beta2 = 0.999
         adam_eps = 1e-8
