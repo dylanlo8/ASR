@@ -16,7 +16,7 @@ class Processor:
             local_files_only=True
         )
     
-    def process_audio(self, list_audio_filepaths, labels):
+    def process_audio(self, list_audio_filepaths, labels = []):
         """
         Processes a list of audio file paths and their corresponding labels to extract features and attention masks.
         

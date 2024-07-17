@@ -126,7 +126,6 @@ class LightningTranslator(pl.LightningModule):
 
         print("\n")
         print(self.tokenizer.batch_decode(output, skip_special_tokens=False))
-
         print("\n")
         print(transcripts)
         print("\n")
@@ -179,6 +178,8 @@ class LightningTranslator(pl.LightningModule):
         return [optimizer], [{"scheduler": lr_scheduler, "interval": "epoch", "frequency": 1}]
         # return [optimizer]
 
+    def decode(self, tokens):
+        return self.tokenizer.batch_decode(tokens, skip_special_tokens=False)
 
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):
     """
