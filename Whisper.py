@@ -43,7 +43,6 @@ class Whisper:
 
         # Initialize DataLoader for batch encoding
         data_loader = DataLoader(audio_dataset, batch_size=self.BATCH_SIZE, shuffle=False)
-
         all_embeddings = []
         all_labels = []
 
@@ -52,6 +51,7 @@ class Whisper:
                 inputs = batch['input_features'].to(self.device_type)
                 att_mask = batch['attention_mask'].to(self.device_type)
                 labels = batch['labels']
+                all_labels.extend(labels)
 
                 # Batch forward pass through Whisper's Encoder 
                 encoder_outputs = self.audio_encoder.encoder(
@@ -62,11 +62,8 @@ class Whisper:
 
                 # Retrieve the encoded audio representations from the last hidden layer from the Encoder
                 audio_embeddings = encoder_outputs.last_hidden_state.to('cpu')
-
                 all_embeddings.append(audio_embeddings)
-                all_labels.extend(labels)
 
         # Consolidate all embeddings into one tensor
         all_embeddings = torch.cat(all_embeddings, dim=0)
-
         return all_embeddings, all_labels 

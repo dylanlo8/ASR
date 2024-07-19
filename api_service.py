@@ -1,32 +1,36 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import List
 import torch
 from torch.utils.data import DataLoader
 from Whisper import Whisper
 from Processor import Processor
-from TranslateModel import TranslateModel, Adaptor
 from Orchestrator import AudioEmbeddingsDataset, LightningTranslator
 import pytorch_lightning as pl
 import uvicorn
+import numpy as np
+from scipy.io import wavfile
+import traceback
 
 torch.set_float32_matmul_precision('medium')
 
 app = FastAPI()
-
-class TextRequest(BaseModel):
-    audio_file_path: List[str]
+processor = Processor()
+whisper = Whisper()
+model = LightningTranslator.load_from_checkpoint(checkpoint_path="checkpoints/with_lr_scheduler_and_cleandata.ckpt").to("cuda")
 
 @app.post("/process/")
-async def process_audio(text_request: TextRequest):
+async def process_audio(file : UploadFile = File(...)):
     try:
-        # Loading Components into memory
-        processor = Processor()
-        whisper = Whisper()
-        model = LightningTranslator.load_from_checkpoint(checkpoint_path="checkpoints/with_lr_scheduler.ckpt").to("cuda")
+        audio_path = file.filename
+        with open(audio_path, "wb+") as fp:
+            fp.write(file.file.read())
+            
+        #take read audio wav numpy array and store it as temporary file
+        # wavfile.write('temp.wav', 16000, audio_request.audio_array)
 
         # Step 1: Process audio file path inputs
-        audio_dataset = processor.process_audio(list_audio_filepaths= text_request.audio_file_path, labels = [])
+        audio_dataset = processor.process_audio(list_audio_filepaths= [audio_path], labels = [''])
         
         # Step 2: Embed audio input features
         audio_embeddings, labels = whisper.embed_audio(audio_dataset)
@@ -43,6 +47,9 @@ async def process_audio(text_request: TextRequest):
         return {"generated_output": results}
     
     except Exception as e:
+        print(e)
+        error_trace = traceback.format_exc()
+        print(error_trace)
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@ def main():
     # df2 = pd.read_csv("csv_2.csv").head(0)
     # df3 = pd.read_csv("csv_3.csv").head(2000)
 
-    df = pd.read_csv('combined_train_clean.csv')
+    df = pd.read_csv('combined_train_clean.csv').head(1)
 
     #concatenated_df = pd.concat([df1, df2, df3], ignore_index=True)
     cleaned_eng_ref = clean_text(df['eng_reference'].tolist())
@@ -80,7 +80,7 @@ def main():
     trainer = pl.Trainer(
         devices = 1,
         accelerator = 'auto',
-        max_epochs = 20,
+        max_epochs = 6,
         enable_checkpointing = True,
         logger = logger,
         callbacks= [lr_monitor, checkpoint_callback],
@@ -91,7 +91,7 @@ def main():
     trainer.fit(
         model=lightning_translator, 
         train_dataloaders=train_audioloader,
-        # ckpt_path = 'my_checkpoints/checkpoint.ckpt',
+        ckpt_path = 'my_checkpoints/checkpoint.ckpt',
     )
 
     trainer.save_checkpoint("checkpoints/with_lr_scheduler_and_cleandata.ckpt")

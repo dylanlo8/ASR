@@ -32,8 +32,8 @@ def clean_text(text):
   
 def main():
     # Set up the dataset
-    df1 = pd.read_csv("data/sub/hi.csv").head(10)
-    df2 = pd.read_csv("csv_2.csv").head(0)
+    df1 = pd.read_csv("data/sub/hi.csv").head(1)
+    df2 = pd.read_csv("csv_1.csv").head(0)
 
     concatenated_df = pd.concat([df1, df2], ignore_index=True)
    
@@ -41,7 +41,7 @@ def main():
 
     # STEP 1: Parse through AudioProcessor
     processor = Processor()
-    train_dataset = processor.process_audio(concatenated_df['trimmed_segment_path'], concatenated_df['eng_reference'])
+    train_dataset = processor.process_audio(concatenated_df['trimmed_segment_path'], )
     
     # STEP 2: Parse through Whisper Encoder
     del processor

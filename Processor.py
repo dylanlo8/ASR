@@ -53,22 +53,14 @@ class Processor:
 
             batch["input_features"] = features['input_features'][0]
             batch["attention_mask"] = features["attention_mask"][0]
-            
-            # Handle labels if provided
-            if 'labels' in batch:
-                batch["labels"] = batch["labels"] + " "
+            batch["labels"] = batch["labels"] + " <|endoftext|>"
             
             return batch
         
-        if labels is None:
-            audio_dataset = Dataset.from_dict({
-                "audio": list_audio_filepaths
-            })
-        else:
-            audio_dataset = Dataset.from_dict({
-                "audio": list_audio_filepaths,
-                "labels": labels
-            })
+        audio_dataset = Dataset.from_dict({
+            "audio": list_audio_filepaths,
+            "labels": labels
+        })
 
         # Cast and process
         audio_dataset = audio_dataset.cast_column("audio", Audio(sampling_rate=16000)).map(prepare_dataset)
