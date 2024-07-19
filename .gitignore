@@ -4,3 +4,4 @@ venv
 data
 unprocessed_data
 whisper-medium-thai
+.env
