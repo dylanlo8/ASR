@@ -1,5 +1,4 @@
 import gradio as gr
-import soundfile as sf
 import requests
 from scipy.io.wavfile import write
 import os

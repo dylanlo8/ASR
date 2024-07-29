@@ -1,10 +1,10 @@
 from datasets import Dataset, Audio
 from transformers import AutoProcessor
+import pandas as pd
 
 class Processor:
     """
-    Class for processing Audio .wav files and preparing them as input features into Whisper's Automatic
-    Speech Recognition Model.
+    Class for to handle processing Audio .wav files and preparing them as input features into Whisper 
     
     Attributes:
         audio_processor (AutoProcessor): Processor for extracting features from audio files.
@@ -16,7 +16,7 @@ class Processor:
             local_files_only=True
         )
     
-    def process_audio(self, list_audio_filepaths, labels=None):
+    def process_audio(self, list_audio_filepaths, labels = pd.Series()):
         """
         Processes a list of audio file paths and their corresponding labels to extract features and attention masks.
         
@@ -28,10 +28,8 @@ class Processor:
             audio_dataset (Dataset): Dataset containing input_features, attention masks, and labels (if provided).
                 - input_features (torch.Tensor): Tensor containing extracted input features from the audio files.
                 - attention_mask (torch.Tensor): Tensor containing attention masks for the input features.
-                - labels (list of str, optional): List of labels corresponding to the audio files, if provided.
+                - labels (list of str): List of labels corresponding to the audio files, if provided. If not provided, each label would be an empty string.
         """
-
-        print("Processing audio files")
 
         def prepare_dataset(batch):
             """
@@ -53,17 +51,22 @@ class Processor:
 
             batch["input_features"] = features['input_features'][0]
             batch["attention_mask"] = features["attention_mask"][0]
-            batch["labels"] = batch["labels"] + " <|endoftext|>"
+            batch["labels"] = batch["labels"] + " <|eot_id|>"
             
             return batch
         
+        # If labels is not specified
+        if labels.empty:
+            labels = [''] * len(list_audio_filepaths)
+
+        print("Processing audio files")
         audio_dataset = Dataset.from_dict({
             "audio": list_audio_filepaths,
             "labels": labels
         })
 
-        # Cast and process
+        # Cast to Audio format and map the processing function
         audio_dataset = audio_dataset.cast_column("audio", Audio(sampling_rate=16000)).map(prepare_dataset)
 
-        # Contains input_features, attention_mask, labels (if provided)
+        # Contains input_features, attention_mask, labels
         return audio_dataset

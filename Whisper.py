@@ -5,8 +5,7 @@ import torch
 class Whisper:
     """
     This class provides methods to load a pre-trained Whisper Model and use it to generate embedded representations of the audio data.
-    The Whisper's embedded representations have the dimensions (batch, sequence_length, embedding_dimensions) which are fixed to (X, 1500, 1024), 
-    where X is the batch size or size of the dataset.
+    The Whisper's embedded representations have the dimensions (batch_size, sequence_length, embedding_dimensions) which are fixed to (X, 1500, 1024).
 
     Attributes:
         BATCH_SIZE (int): Batch size for data loader.
@@ -23,11 +22,12 @@ class Whisper:
             path_to_whisper_model,
             local_files_only=True
         ).to(self.device_type)
+        
         print("Whisper Loaded and ready to embed audio inputs")
         
     def embed_audio(self, audio_dataset):
         """
-        Embeds the audio inputs from the dataset using the Whisper ASR model.
+        Embeds the audio inputs from the dataset using the Whisper's encoder.
         
         Args:
             audio_dataset (Dataset): Dataset containing input_features, attention masks, and labels.
@@ -66,4 +66,4 @@ class Whisper:
 
         # Consolidate all embeddings into one tensor
         all_embeddings = torch.cat(all_embeddings, dim=0)
-        return all_embeddings, all_labels 
+        return all_embeddings, all_labels

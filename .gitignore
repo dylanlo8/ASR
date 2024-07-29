@@ -3,5 +3,7 @@ venv/
 venv
 data
 unprocessed_data
-whisper-medium-thai
+whisper-medium/
+sea-lion-7b-instruct/
+Meta-Llama-3.1-8B-instruct/
 .env

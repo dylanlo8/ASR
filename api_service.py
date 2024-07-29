@@ -1,16 +1,11 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel
-from typing import List
+import uvicorn
+import traceback
 import torch
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from torch.utils.data import DataLoader
 from Whisper import Whisper
 from Processor import Processor
 from Orchestrator import AudioEmbeddingsDataset, LightningTranslator
-import pytorch_lightning as pl
-import uvicorn
-import numpy as np
-from scipy.io import wavfile
-import traceback
 
 torch.set_float32_matmul_precision('medium')
 

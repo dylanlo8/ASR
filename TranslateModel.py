@@ -57,14 +57,14 @@ class TranslateModel(torch.nn.Module):
     Attributes:
         device_type (torch.device): Device to run the model on (CUDA or CPU).
         tokenizer (AutoTokenizer): Tokenizer for the pre-trained SeaLion Large Language Model.
-        llm (AutoModelForCausalLM): Pre-trained language model for causal language modeling.
+        llm (AutoModelForCausalLM): Pre-trained pre-trained SeaLion Large Language Model for causal language modeling.
         prefix_embeddings (torch.Tensor): Embeddings for the prefix prompt template.
         suffix_embeddings (torch.Tensor): Embeddings for the suffix prompt template.
         adaptor (Adaptor): Neural network module for adapting audio embeddings.
         generation_kwargs (dict): Arguments for text generation.
     """
     
-    def __init__(self, llm="./sea-lion-7b-instruct"):
+    def __init__(self, llm="./Meta-Llama-3.1-8B-Instruct"):
         """
         Initializes the TranslateModel with the specified pre-trained language model.
         
@@ -94,9 +94,22 @@ class TranslateModel(torch.nn.Module):
         for param in self.llm.parameters():
             param.requires_grad = False
 
-        # Embedding the SeaLion LLM Prompt Template
-        self.prefix_embeddings = self.embed_prompt("### USER:\nTranslate the following to English. ").to(self.device_type)
-        self.suffix_embeddings = self.embed_prompt("\n\n### RESPONSE:\n").to(self.device_type)
+        # Tokenize prompt
+        messages = [
+            {"role": "system", "content": "You are a helpful AI assistant that follows instructions."},
+            {"role": "user", "content": "Translate the following to English."},
+        ]
+
+        input_ids = self.tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt"
+        ).to('cuda')
+
+        prefix_id = input_ids[0][:-5]
+        suffix_id = input_ids[0][-5:]
+        self.prefix_embeddings = self.embed_tokens(prefix_id).to('cuda')
+        self.suffix_embeddings = self.embed_tokens(suffix_id).to('cuda')
 
         # Initialise the adaptor
         self.adaptor = Adaptor()
@@ -107,15 +120,16 @@ class TranslateModel(torch.nn.Module):
         # Defining generation arguments for inference
         self.generation_kwargs = {
             "do_sample": False,  # set to true if temperature is not 0
-            "temperature": None,
+            "temperature": 0.4,
             "max_new_tokens": 256,
             "top_k": 50,
             "top_p": 0.7,
             "repetition_penalty": 1.2,
-            "eos_token_id": self.tokenizer.eos_token_id
+            "eos_token_id": self.tokenizer.eos_token_id,
+            # "renormalize_logits": True,
         }
 
-    def forward(self, audio_embeddings, transcripts, eos_token_id=1):
+    def forward(self, audio_embeddings, transcripts, eot_token_id=128009):
         """
         Forward pass for translating audio embeddings to text.
         
@@ -154,13 +168,6 @@ class TranslateModel(torch.nn.Module):
         )
 
         inputs_embeds = cat_embeddings
-
-        # Initialise a tensor to mark whether a sample in a batch has generated the eos_token
-        eos_mask = torch.zeros(batch_size, dtype=torch.bool)
-
-        # Pairs the eos_mask with a binary masked tensor where predictions at positions with 1 will be
-        # considered during the loss calculation and elements with 0 will be ignored at the loss calculation
-        attention_mask = torch.ones((batch_size, max_tokens_to_generate)).to("cuda")
         
         # Iteratively generate tokens 
         for i in range(max_tokens_to_generate):
@@ -170,28 +177,16 @@ class TranslateModel(torch.nn.Module):
             # Extract the token id with the highest predicted probability
             sampled_token = torch.argmax(res.logits[:, -1, :].softmax(dim=-1), -1).view(-1, 1)
 
+            if sampled_token == eot_token_id:
+                break
+
             # Convert the sampled token into embedding
-            sampled_embedding = self.llm.transformer.wte(sampled_token)
+            sampled_embedding = self.embed_tokens(sampled_token)
 
             # Concat sampled token embedding with the input embeddings for the next token prediction
             inputs_embeds = torch.cat((inputs_embeds, sampled_embedding), dim=1)  # batch_size, seq_length, 4096
 
-            # Update eos_mask to mark sequences that have generated eos_token_id
-            for batch_idx in range(batch_size):
-                # If sampled token == endoftext token
-                if not eos_mask[batch_idx] and sampled_token[batch_idx, 0].item() == eos_token_id:
-                    eos_mask[batch_idx] = True
-
-                    # all tokens from here set to 0 in attention mask
-                    if i < max_tokens_to_generate:  # prevent out of bounds error
-                        attention_mask[batch_idx, i + 1:] = 0  # ele at i represent end_of_text token
-                    
-            # Check if all sequences have generated eos_token_id
-            if eos_mask.all():
-                attention_mask = attention_mask[:, :i + 1]
-                break
-
-        return res.logits, attention_mask 
+        return res.logits
     
     def predict(self, audio_embeddings):
         """
@@ -210,7 +205,7 @@ class TranslateModel(torch.nn.Module):
         # Adapt audio embeddings
         adapted_audio_embeddings = self.adaptor(audio_embeddings.to(self.device_type))  # (batch_size, adapted_seq, 1024)
 
-        batch_size = adapted_audio_embeddings.size(0)  # get batch_size of audio embeddings
+        batch_size = adapted_audio_embeddings.size(0)
 
         # Concatenate audio embeddings with embedded prefix and suffix prompt template
         cat_embeddings = torch.cat([
@@ -222,11 +217,12 @@ class TranslateModel(torch.nn.Module):
 
         output = self.llm.generate(
             inputs_embeds=cat_embeddings,
-            **self.generation_kwargs)
+            **self.generation_kwargs
+        )
         
         return output
     
-    def decode(self, logits, attention_mask):
+    def decode(self, logits):
         """
         Applies a softmax function on the logits and return the argmax of the probabilities of the predicted tokens.
         Returns a pytorch tensor of the predicted tokens 
@@ -238,7 +234,6 @@ class TranslateModel(torch.nn.Module):
         Returns:
             torch.Tensor: Sampled token IDs with dimensions (batch_size, sequence_length).
         """
-        logits = post_process_logits(logits, attention_mask)
         
         # Softmax along Vocabulary dimension 
         probs = logits.softmax(dim=-1)
@@ -248,16 +243,6 @@ class TranslateModel(torch.nn.Module):
         
         return sampled_tokens
     
-    def embed_prompt(self, prompt):
-        """
-        Embeds the given prompt into token embeddings.
-        
-        Args:
-            prompt (str): Text prompt to be embedded.
-        
-        Returns:
-            torch.Tensor: Embeddings for the prompt with dimensions (sequence_length, embedding_dim=4096).
-        """
-        tokens = self.tokenizer(prompt, return_tensors="pt")
-        embeddings = self.llm.transformer.wte(tokens['input_ids'].to("cuda"))
+    def embed_tokens(self, tokens):
+        embeddings = self.llm.model.embed_tokens(tokens.to('cuda'))
         return embeddings

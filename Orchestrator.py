@@ -24,7 +24,7 @@ class LightningTranslator(pl.LightningModule):
         super().__init__()
         self.model = TranslateModel()
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "./sea-lion-7b-instruct", 
+            "./Meta-Llama-3.1-8B-Instruct", 
             trust_remote_code=True,
             local_files_only=True
         )
@@ -42,8 +42,8 @@ class LightningTranslator(pl.LightningModule):
         Returns:
             tuple: Logits tensor and attention mask tensor.
         """
-        logits, mask = self.model(audio_embeddings, transcripts)
-        return logits, mask
+        logits = self.model(audio_embeddings, transcripts)
+        return logits
 
     def training_step(self, batch, batch_idx):
         """
@@ -59,27 +59,26 @@ class LightningTranslator(pl.LightningModule):
         audio_embeddings, transcripts = batch[0], batch[1]
 
         # Tokenize transcripts
-        tokens = self.tokenizer(transcripts, return_tensors="pt", padding=True)
+        tokens = self.tokenizer(transcripts, return_tensors="pt")
         tokenised_labels = tokens["input_ids"].to("cuda")
 
         # Get predicted tokens
-        output_logits, attention_mask = self(audio_embeddings, transcripts)
+        output_logits = self(audio_embeddings, transcripts)
         
         # Previewing output during training
         print("\n")
-        tokenised_output = self.model.decode(output_logits, attention_mask)
-        # decodes the tokenised output into string format
+        tokenised_output = self.model.decode(output_logits[:, 355:, :])
         print(self.tokenizer.batch_decode(tokenised_output))
         print("\n")
         print(transcripts)
         print("\n")
 
         # Calculate cross entropy loss
-        loss = self.calculate_loss(output_logits, attention_mask, tokenised_labels)
+        loss = self.calculate_loss(output_logits, tokenised_labels)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
-        #self.check_adaptor_gradients()
+        # self.check_adaptor_gradients()
 
         return loss
 
@@ -132,7 +131,7 @@ class LightningTranslator(pl.LightningModule):
 
         return output
         
-    def calculate_loss(self, logits, mask, tokenised_labels):
+    def calculate_loss(self, logits, tokenised_labels):
         """
         Calculates the cross entropy loss between predicted logits and tokenized labels.
 
@@ -144,11 +143,12 @@ class LightningTranslator(pl.LightningModule):
         Returns:
             torch.Tensor: Calculated Cross Entropy Loss.
         """
-        generated_logits, tokenised_labels = padding_process(logits, mask, tokenised_labels)
 
-        # Ignore padding tokens
+        # Pad if needed
+        generated_logits = padding_process(logits, tokenised_labels)
+
         # Require permuting logits into (batch_size, vocab, sequence_length)
-        loss = torch.nn.CrossEntropyLoss(ignore_index=3)(
+        loss = torch.nn.CrossEntropyLoss(ignore_index = 128002)(
             generated_logits.permute(0, 2, 1), tokenised_labels
         )
         
@@ -177,9 +177,6 @@ class LightningTranslator(pl.LightningModule):
 
         return [optimizer], [{"scheduler": lr_scheduler, "interval": "epoch", "frequency": 1}]
         # return [optimizer]
-
-    def decode(self, tokens):
-        return self.tokenizer.batch_decode(tokens, skip_special_tokens=False)
 
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):
     """
