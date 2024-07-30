@@ -1,0 +1,6 @@
+my_checkpoints/
+logs/
+combined_clean_all/
+data/
+venv/
+checkpoints/

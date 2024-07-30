@@ -1,6 +1,7 @@
 from transformers import WhisperModel
 from torch.utils.data import DataLoader
 import torch
+import config
 
 class Whisper:
     """
@@ -13,7 +14,7 @@ class Whisper:
         audio_encoder (WhisperModel): Pre-trained Whisper model for audio encoding.
     """
     
-    def __init__(self, path_to_whisper_model = './whisper-medium'):
+    def __init__(self, path_to_whisper_model = config.ASR['ASR_NAME']):
         self.BATCH_SIZE = 32
         self.device_type = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

@@ -8,14 +8,18 @@ import pandas as pd
 torch.set_float32_matmul_precision('medium')
   
 def main():
-    # Read test  dataset
-    #test_df = pd.read_csv("data/sub/hi.csv").head(30)
+    # Set up the dataset
+    # df1 = pd.read_csv("data/sub/hi.csv").head(1)
+    # df2 = pd.read_csv("csv_1.csv").head(0)
+
+    # concatenated_df = pd.concat([df1, df2], ignore_index=True)
+   
+    #cleaned_eng_ref = clean_text(concatenated_df['eng_reference'].tolist())
 
     # STEP 1: Parse through AudioProcessor
     processor = Processor()
-    # test_dataset = processor.process_audio(test_df['trimmed_segment_path'], test_df['eng_reference'])
-    test_dataset = processor.process_audio(['lifelong_learning_data.wav'])
-
+    test_dataset = processor.process_audio(['data/demotest/ai.wav'], [''])
+    
     # STEP 2: Parse through Whisper Encoder
     del processor
     torch.cuda.empty_cache()
