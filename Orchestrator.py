@@ -5,6 +5,7 @@ import torch.optim as optim
 from transformers import AutoTokenizer
 from utils import *
 import torch.nn.functional as F
+import config
 
 torch.set_grad_enabled(True)
 
@@ -24,25 +25,23 @@ class LightningTranslator(pl.LightningModule):
         super().__init__()
         self.model = TranslateModel()
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "./Meta-Llama-3.1-8B-Instruct", 
+            config.LLM['LLM_NAME'], 
             trust_remote_code=True,
             local_files_only=True
         )
-
-        # self.automatic_optimization = False
         
-    def forward(self, audio_embeddings, transcripts):
+    def forward(self, audio_embeddings, tokenised_labels):
         """
         Forward pass for generating logits and attention mask from audio embeddings and transcripts.
         
         Args:
             audio_embeddings (torch.Tensor): Tensor containing audio embeddings.
-            transcripts (list of str): List of transcripts corresponding to the audio inputs.
+            tokenised_labels (torch.Tensor): Tensor containing the tokens of the ground truth labels.
         
         Returns:
-            tuple: Logits tensor and attention mask tensor.
+            torch.Tensor: Output logits tensor with dimensions (batch_size, seq_length, vocab_size)
         """
-        logits = self.model(audio_embeddings, transcripts)
+        logits = self.model(audio_embeddings, tokenised_labels)
         return logits
 
     def training_step(self, batch, batch_idx):
@@ -60,26 +59,18 @@ class LightningTranslator(pl.LightningModule):
 
         # Tokenize transcripts
         tokens = self.tokenizer(transcripts, return_tensors="pt")
-        tokenised_labels = tokens["input_ids"].to("cuda")
+        tokenised_labels = tokens["input_ids"][:, 1:].to("cuda") # Indexing to skip <|begin_of_text|> token
 
         # Get predicted tokens
-        output_logits = self(audio_embeddings, transcripts)
+        output_logits = self(audio_embeddings, tokenised_labels)
         
-        # Previewing output during training
-        print("\n")
-        tokenised_output = self.model.decode(output_logits[:, 355:, :])
-        print(self.tokenizer.batch_decode(tokenised_output))
-        print("\n")
-        print(transcripts)
-        print("\n")
-
         # Calculate cross entropy loss
         loss = self.calculate_loss(output_logits, tokenised_labels)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
+        # Check whether gradients are being backpropogated if necessary
         # self.check_adaptor_gradients()
-
         return loss
 
     def check_adaptor_gradients(self):
@@ -108,21 +99,6 @@ class LightningTranslator(pl.LightningModule):
         audio_embeddings, transcripts = batch[0], batch[1]
         output = self.model.predict(audio_embeddings)
 
-        # rephrase_prompt_prefix = self.tokenizer("### USER:\nTranslate the following to English. ", return_tensors='pt')
-        # rephrase_prompt_suffix = self.tokenizer("\n\n### RESPONSE:\n", return_tensors='pt')
-        
-        # tokenised_full_prompt = torch.cat([
-        #     rephrase_prompt_prefix['input_ids'], 
-        #     output[0], 
-        #     rephrase_prompt_suffix['input_ids']], 
-        #     dim=1
-        # )
-
-        # rephrased_output = self.model.llm.generate(
-        #     tokenised_full_prompt,
-        #     **self.model.generation_kwargs,
-        # )
-
         print("\n")
         print(self.tokenizer.batch_decode(output, skip_special_tokens=False))
         print("\n")
@@ -136,15 +112,14 @@ class LightningTranslator(pl.LightningModule):
         Calculates the cross entropy loss between predicted logits and tokenized labels.
 
         Args:
-            logits (torch.Tensor): Predicted logits from the model.
-            mask (torch.Tensor): Attention mask for the logits.
-            labels (torch.Tensor): Tokenized labels for the transcripts.
+            logits (torch.Tensor): Output logits from the forward function.
+            tokenised_labels (torch.Tensor): Tensor containing the tokens of the ground truth labels.
         
         Returns:
-            torch.Tensor: Calculated Cross Entropy Loss.
+            torch.Tensor: Calculated Cross Entropy Loss. Pytorch Lightning handles backpropogation under the hood.
         """
 
-        # Pad if needed
+        # Pad logits if needed
         generated_logits = padding_process(logits, tokenised_labels)
 
         # Require permuting logits into (batch_size, vocab, sequence_length)
@@ -176,7 +151,6 @@ class LightningTranslator(pl.LightningModule):
         lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
         return [optimizer], [{"scheduler": lr_scheduler, "interval": "epoch", "frequency": 1}]
-        # return [optimizer]
 
 class AudioEmbeddingsDataset(torch.utils.data.Dataset):
     """

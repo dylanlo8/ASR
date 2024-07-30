@@ -1,6 +1,7 @@
 from datasets import Dataset, Audio
 from transformers import AutoProcessor
 import pandas as pd
+import config
 
 class Processor:
     """
@@ -51,7 +52,7 @@ class Processor:
 
             batch["input_features"] = features['input_features'][0]
             batch["attention_mask"] = features["attention_mask"][0]
-            batch["labels"] = batch["labels"] + " <|eot_id|>"
+            batch["labels"] = batch["labels"] + " " + config.EOT['EOT_TOKEN']
             
             return batch
         
@@ -65,7 +66,7 @@ class Processor:
             "labels": labels
         })
 
-        # Cast to Audio format and map the processing function
+        # Cast to Audio 16k sampling rate format and map Whisper processing function
         audio_dataset = audio_dataset.cast_column("audio", Audio(sampling_rate=16000)).map(prepare_dataset)
 
         # Contains input_features, attention_mask, labels
