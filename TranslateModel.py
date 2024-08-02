@@ -20,10 +20,10 @@ class Adaptor(torch.nn.Module):
         Initializes the Adaptor with adaptive average pooling layers, a linear projection layer, and a layer normalization layer.
         """
         super(Adaptor, self).__init__()
-        self.pool1 = torch.nn.AdaptiveAvgPool1d(output_size= config.ASR['ASR_SEQ'] / 2) # 750
-        self.pool2 = torch.nn.AdaptiveAvgPool1d(output_size= config.ASR['ASR_SEQ'] / 4) # 375
-        self.linear = torch.nn.Linear(config.ASR['ASR_EMBED_DIM'], config.LLM['LLM_EMBED_DIM'])
-        self.layer_norm = torch.nn.LayerNorm(config.LLM['LLM_EMBED_DIM'])
+        self.pool1 = torch.nn.AdaptiveAvgPool1d(output_size= int(config.ASR['ASR_SEQ'] / 2)) # 750
+        self.pool2 = torch.nn.AdaptiveAvgPool1d(output_size= int(config.ASR['ASR_SEQ'] / 4)) # 375
+        self.linear = torch.nn.Linear(int(config.ASR['ASR_EMBED_DIM']), int(config.LLM['LLM_EMBED_DIM']))
+        self.layer_norm = torch.nn.LayerNorm(int(config.LLM['LLM_EMBED_DIM']))
 
     def forward(self, x):
         """

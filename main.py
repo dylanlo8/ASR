@@ -15,7 +15,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def main():
     # Set up the dataset
-    df = pd.read_csv('combined_train_clean.csv')
+    df = pd.read_csv('combined_train_clean.csv').head(1)
 
     # STEP 1: Parse through AudioProcessor
     processor = Processor()
@@ -56,7 +56,7 @@ def main():
     trainer = pl.Trainer(
         devices = 1,
         accelerator = 'auto',
-        max_epochs = 12,
+        max_epochs = 6,
         enable_checkpointing = True,
         logger = logger,
         callbacks= [lr_monitor, checkpoint_callback],
@@ -67,10 +67,10 @@ def main():
     trainer.fit(
         model=lightning_translator, 
         train_dataloaders=train_audioloader,
-        # ckpt_path = 'my_checkpoints/checkpoint_llama_epoch=5.ckpt',
+        ckpt_path = 'my_checkpoints/checkpoint_llama_epoch=5.ckpt',
     )
 
-    trainer.save_checkpoint("checkpoints/epoch_llama=12.ckpt")
+    trainer.save_checkpoint("checkpoints/epoch_llama=6.ckpt")
 
 if __name__ == "__main__":
     main()

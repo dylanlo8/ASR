@@ -4,8 +4,10 @@ from Orchestrator import AudioEmbeddingsDataset, LightningTranslator
 import torch
 from torch.utils.data import DataLoader
 import pandas as pd
+import os
 
 torch.set_float32_matmul_precision('medium')
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
   
 def main():
     # Set up the dataset
@@ -18,7 +20,7 @@ def main():
 
     # STEP 1: Parse through AudioProcessor
     processor = Processor()
-    test_dataset = processor.process_audio(['data/demotest/ai.wav'], [''])
+    test_dataset = processor.process_audio(['data/demotest/lifelong_learning_data.wav'])
     
     # STEP 2: Parse through Whisper Encoder
     del processor
@@ -33,7 +35,7 @@ def main():
     torch.cuda.empty_cache()
 
     # STEP 4: Load model from checkpoint
-    model = LightningTranslator.load_from_checkpoint(checkpoint_path="checkpoints/with_lr_scheduler_and_cleandata.ckpt").to("cuda")
+    model = LightningTranslator.load_from_checkpoint(checkpoint_path="checkpoints/epoch_llama=6.ckpt").to("cuda")
 
     for batch_idx, batch in enumerate(test_audioloader):
         model.predict_step(batch, batch_idx)
