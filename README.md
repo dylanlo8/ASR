@@ -3,10 +3,10 @@
 This project aims to address the challenges of transcribing and translating audio from low-resource languages by leveraging the capabilities of large language models (LLMs) in a multimodal setting. By integrating the ASR and LLM with an projection adaptor, we sought to develop a novel solution for translating conversational low-resource languages. Our experiments have demonstrated the viability of using LLMs for direct audio-to-text translation in low-resource languages settings. We hope our work serves as a starting point for further exploration and improvement in this field, ultimately contributing to more accessible and accurate translation technologies for low-resource languages.
 
 Our model architecture:
-![ASR Diagram(2)](https://github.com/user-attachments/assets/2a38b960-1339-4fab-90fd-01c27f766bb5)
+![ASR Diagram(1)(1)](https://github.com/user-attachments/assets/cf7ad0c9-fbf8-435d-90ca-9fdbb63d707a)
 
 Our Adaptor architecture:
-![ASR Diagram (3)](https://github.com/user-attachments/assets/16cc45b1-573b-4bc3-acba-d99d20ba98cf)
+![ASR Diagram(2)](https://github.com/user-attachments/assets/22441b99-0608-452f-993a-6b718f889f7f)
 
 This repository contains the code necessary for training of an adaptor layer between a pre-trained ASR model (Whisper-Medium) and a pre-trained LLM (Meta-Llama-3.1-8B-Instruct) to complete the translation task. 
 
